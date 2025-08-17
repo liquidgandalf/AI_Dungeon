@@ -7,6 +7,7 @@ import base64
 from flask import Flask, render_template, request
 from flask_socketio import SocketIO, emit
 from .items import get_item, get_item_icons_map
+import uuid
 from .config import get_game_config
 
 # Resolve directories relative to this file
@@ -124,10 +125,35 @@ def _process_action(sid: str, button: str):
     if sid not in players:
         return
     if button == 'inventory':
-        # emit state immediately
+        # emit state immediately (backward compatible: send item type ids/names)
         p = players[sid]
-        inv_names = [{'id': iid, 'name': (get_item(iid) or {}).get('name', iid)} for iid in p['inventory']]
-        eq = {k: (v and {'id': v, 'name': (get_item(v) or {}).get('name', v)}) for k, v in p['equipment'].items()}
+        # Build inventory view: show type id/name, include instance metadata optionally
+        inv_names = []
+        for inst_id in (p.get('inventory') or []):
+            inst = (p.get('items') or {}).get(inst_id) or {}
+            type_id = inst.get('type') or inst_id  # fallback for legacy
+            it = get_item(type_id) or {}
+            inv_names.append({
+                'id': type_id,
+                'name': it.get('name', type_id),
+                'instance_id': inst_id,
+                'durability': inst.get('durability'),
+                'max_durability': (it.get('stats') or {}).get('durability'),
+            })
+        # Equipment view: slot -> {id,name,instance_id}
+        eq = {}
+        for slot, inst_id in (p.get('equipment') or {}).items():
+            if inst_id:
+                inst = (p.get('items') or {}).get(inst_id) or {}
+                type_id = inst.get('type') or inst_id
+                it = get_item(type_id) or {}
+                eq[slot] = {
+                    'id': type_id,
+                    'name': it.get('name', type_id),
+                    'instance_id': inst_id,
+                }
+            else:
+                eq[slot] = None
         emit('state', {
             'stats': p['stats'],
             'equipment': eq,
@@ -204,8 +230,10 @@ def on_disconnect():
         ip_profiles[client_ip] = {
             'name': p.get('name'),
             'stats': p.get('stats', {}),
-            'equipment': p.get('equipment', {}),
-            'inventory': p.get('inventory', []),
+            # Persist instances and references
+            'items': p.get('items', {}),
+            'equipment': p.get('equipment', {}),  # instance ids per slot
+            'inventory': p.get('inventory', []),  # list of instance ids
             'backpack_weight_used': p.get('backpack_weight_used', 0.0),
             'cell': p.get('cell'),  # populated by game loop each frame
             'angle': p.get('angle'),
@@ -267,7 +295,10 @@ def on_join(data):
             'legs': None,
             'feet': None,
         },
-        'inventory': persisted.get('inventory', []),   # list of item_ids
+        # Instances: items dict keyed by instance_id -> {type, durability}
+        'items': {},
+        # Inventory now stores instance_ids
+        'inventory': [],
         'backpack_weight_used': persisted.get('backpack_weight_used', 0.0),
         # base player stats (IP-bound core stats + base misc), prefer persisted overrides
         'stats': {**core_stats, **persisted.get('stats', {})},
@@ -322,19 +353,68 @@ def on_join(data):
     except Exception:
         # Ignore saving errors silently for now
         pass
-    # Restore equipment if available
-    if 'equipment' in persisted:
-        players[sid]['equipment'].update(persisted['equipment'] or {})
-    # If no persisted right-hand item, equip a default pickaxe
+    # Migration/restore: support legacy profiles and instance-aware profiles
+    def _new_inst_id():
+        return f"it_{uuid.uuid4().hex[:10]}"
+
+    # If persisted already has instances
+    if isinstance(persisted.get('items'), dict):
+        players[sid]['items'] = dict(persisted.get('items') or {})
+        # Inventory restore (instance ids)
+        inv_in = list(persisted.get('inventory') or [])
+        players[sid]['inventory'] = [iid for iid in inv_in if isinstance(iid, str)]
+        # Equipment restore (instance ids)
+        if 'equipment' in persisted and isinstance(persisted['equipment'], dict):
+            for k in players[sid]['equipment'].keys():
+                v = (persisted['equipment'] or {}).get(k)
+                players[sid]['equipment'][k] = v if isinstance(v, str) else None
+    else:
+        # Legacy: persisted inventory is a list of type ids; equipment maps to type ids
+        legacy_inv_types = list(persisted.get('inventory') or [])
+        legacy_eq = dict(persisted.get('equipment') or {})
+        # Create instances for inventory
+        for t_id in legacy_inv_types:
+            if not isinstance(t_id, str):
+                continue
+            inst_id = _new_inst_id()
+            it = get_item(t_id) or {}
+            max_d = int((it.get('stats') or {}).get('durability') or 0)
+            players[sid]['items'][inst_id] = {'type': t_id, 'durability': max_d}
+            players[sid]['inventory'].append(inst_id)
+        # Create/equip instances for equipped slots
+        for slot in players[sid]['equipment'].keys():
+            t_id = legacy_eq.get(slot)
+            if isinstance(t_id, str) and t_id:
+                it = get_item(t_id) or {}
+                max_d = int((it.get('stats') or {}).get('durability') or 0)
+                inst_id = _new_inst_id()
+                players[sid]['items'][inst_id] = {'type': t_id, 'durability': max_d}
+                players[sid]['equipment'][slot] = inst_id
+    # Ensure a default pickaxe in right hand if empty
     if not players[sid]['equipment'].get('right_hand'):
-        players[sid]['equipment']['right_hand'] = 'pickaxe_basic'
+        # spawn a fresh pickaxe instance
+        t_id = 'pickaxe_basic'
+        it = get_item(t_id) or {}
+        max_d = int((it.get('stats') or {}).get('durability') or 0)
+        inst_id = _new_inst_id()
+        players[sid]['items'][inst_id] = {'type': t_id, 'durability': max_d}
+        players[sid]['equipment']['right_hand'] = inst_id
     print(f"Player joined: {name} ({sid})")
     emit('joined', {'ok': True})
-    # Send lightweight equipment snapshot for HUD (no overlay)
-    eq_ids = {k: v for k, v in players[sid]['equipment'].items()}
-    emit('equip', {
-        'equipment': eq_ids,
-    }, to=sid)
+    # Send lightweight equipment snapshot for HUD (compat: send type ids; include instance ids)
+    def _equip_payload(p):
+        out_types = {}
+        out_insts = {}
+        for slot, inst_id in (p.get('equipment') or {}).items():
+            if inst_id:
+                inst = (p.get('items') or {}).get(inst_id) or {}
+                out_types[slot] = inst.get('type') or None
+                out_insts[slot] = inst_id
+            else:
+                out_types[slot] = None
+                out_insts[slot] = None
+        return {'equipment': out_types, 'equipment_instances': out_insts}
+    emit('equip', _equip_payload(players[sid]), to=sid)
     _emit_cooldown(sid)
 
 @socketio.on('control')
@@ -362,19 +442,28 @@ def on_action(data):
     # For now: on inventory, send a full state snapshot to the client
     if btn == 'inventory':
         p = players[sid]
-        # resolve inventory item names
-        inv = [{
-            'id': iid,
-            'name': (get_item(iid) or {}).get('name', iid)
-        } for iid in (p.get('inventory') or [])]
-        # resolve equipped item names
+        inv = []
+        for inst_id in (p.get('inventory') or []):
+            inst = (p.get('items') or {}).get(inst_id) or {}
+            type_id = inst.get('type') or inst_id
+            it = get_item(type_id) or {}
+            inv.append({
+                'id': type_id,
+                'name': (it or {}).get('name', type_id),
+                'instance_id': inst_id,
+                'durability': inst.get('durability'),
+                'max_durability': (it.get('stats') or {}).get('durability'),
+            })
         eq = {}
-        for slot, iid in (p.get('equipment') or {}).items():
-            if iid:
-                it = get_item(iid)
+        for slot, inst_id in (p.get('equipment') or {}).items():
+            if inst_id:
+                inst = (p.get('items') or {}).get(inst_id) or {}
+                type_id = inst.get('type') or inst_id
+                it = get_item(type_id)
                 eq[slot] = {
-                    'id': iid,
-                    'name': (it or {}).get('name', iid)
+                    'id': type_id,
+                    'name': (it or {}).get('name', type_id),
+                    'instance_id': inst_id,
                 }
             else:
                 eq[slot] = None

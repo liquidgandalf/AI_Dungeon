@@ -951,8 +951,10 @@
       const R = extractDurInfo(eq.right_hand);
       hudEquip.left = L.id;
       hudEquip.right = R.id;
-      setDurBar('left', L.frac, !!L.id);
-      setDurBar('right', R.frac, !!R.id);
+      const hasLeft = !!eq.left_hand;
+      const hasRight = !!eq.right_hand;
+      setDurBar('left', L.frac, hasLeft);
+      setDurBar('right', R.frac, hasRight);
     } catch(_){
       setDurBar('left', null, false);
       setDurBar('right', null, false);
@@ -968,15 +970,13 @@
       const R = extractDurInfo(eq.right_hand);
       hudEquip.left = L.id;
       hudEquip.right = R.id;
-      setDurBar('left', L.frac, !!L.id);
-      setDurBar('right', R.frac, !!R.id);
-      setHudDurBar('left', L.frac, !!L.id);
-      setHudDurBar('right', R.frac, !!R.id);
+      const hasLeft = !!eq.left_hand;
+      const hasRight = !!eq.right_hand;
+      setDurBar('left', L.frac, hasLeft);
+      setDurBar('right', R.frac, hasRight);
     } catch(_){
       setDurBar('left', null, false);
       setDurBar('right', null, false);
-      setHudDurBar('left', null, false);
-      setHudDurBar('right', null, false);
     }
     updateHandIcons();
   });

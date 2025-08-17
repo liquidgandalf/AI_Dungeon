@@ -90,10 +90,11 @@ This document summarizes what’s implemented, how to extend the game using JSON
   - If the equipped hand item has `stats.wall_damage > 0`, hand actions damage the wall in front of the player.
   - Visual feedback: wall columns are darkened proportionally to remaining HP.
 
-- **Per-slot item durability + break handling**:
-  - Durability tracked per equipped slot in `players[sid]['durability'][slot]`.
-  - On successful wall hit, durability decrements by 1 (initial value from `stats.durability`, default 1).
-  - On break (<=0): item is unequipped; we attempt to place it into the backpack if capacity allows; otherwise, it drops adjacent as a world entity. HUD is updated via a lightweight `equip` event.
+- **Instance-based item durability + break handling**:
+  - Each item instance lives in `players[sid]['items'][instance_id]` with fields like `{ type, durability }`.
+  - `players[sid]['equipment'][slot]` stores the `instance_id` for that slot.
+  - On each successful wall hit, the wall returns durability loss to the specific equipped instance. Current value is stored at `items[instance_id].durability` (initialized from the item type's `stats.durability`).
+  - When durability reaches 0, the instance is unequipped and removed. A rich `equip` snapshot is emitted so the phone HUD immediately clears the slot and its bar.
 
 - **Client FX overlays (hit feedback)**:
   - Server emits `fx` events on hit: `{ type: 'crack', cell: [x,y], level }` and `{ type: 'hit_spark' }`.
@@ -102,6 +103,29 @@ This document summarizes what’s implemented, how to extend the game using JSON
 
 - **HUD right-hand icon**:
   - Phone HUD shows the currently equipped right-hand item icon (e.g., pickaxe) or a fallback glyph.
+  - Durability bars for left/right hands update live on every hit via an `equip` event containing per-slot `{ id, name, durability, max_durability }`.
+
+## Stats reference (current behavior)
+
+- **Item stats (`config/items.json`)**
+  - `durability`: starting durability for each new instance of the item type.
+  - `wall_damage`: how much damage this item deals to a wall per hit (only when equipped in a hand and > 0).
+  - `weight`: contributes to backpack capacity usage (where used).
+
+- **Wall stats (`config/wall_types.json`)**
+  - `durability`: the wall tile's max HP for that material (combined with biome scaling; see below).
+  - `damaged` (preferred) or `damage` (fallback): how much durability the wall subtracts from the tool per hit.
+  - `damage_items`: optional allow-list of item type IDs that can damage this wall. If present, only those tools are effective.
+
+- **Game config (`config/game_config.json`)**
+  - `walls.hp_base`: base HP per wall tile.
+  - `walls.hp_per_biome`: additional HP per tile based on biome id. Effective max HP per tile is: `hp_base + hp_per_biome * biome_id`.
+
+- **Live HUD updates**
+  - After each durability change (including break), server emits `equip` with:
+    - `equipment_instances`: map of slot -> instance_id or null.
+    - `equipment`: rich slot objects: `{ id, name, durability, max_durability }` or `null`.
+  - Client handler updates the left/right hand durability bars without reopening inventory.
 
 ## Directory layout (relevant bits)
 - Config: `AI_Dungeon/config/`
@@ -220,7 +244,11 @@ We currently read enemy sprite metadata from `map_entities.json`. We can merge t
 - Big circular rooms (radius 12) are carved at biome centers without breaking the exterior wall.
 
 ### wall_types.json
-Holds wall definitions for future expansion (materials, textures). Currently unused by the renderer.
+Defines wall materials and their gameplay effects.
+- `type`, `name`, `image`: identifiers and optional sprite key.
+- `stats.durability`: material base durability (used to set/refresh a tile's HP when first hit).
+- `stats.damaged` (preferred) or `stats.damage`: damage dealt back to the tool's durability each hit.
+- `damage_items`: optional array of item type ids that can affect this wall.
 
 ### map_entities.json
 Places actual things on the map and provides sprite metadata for each placement (billboard rendering). Coordinates are in grid space (tile coordinates). Use floats for center-of-tile placement (e.g., `6.5` means center of tile 6).

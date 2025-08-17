@@ -5,16 +5,19 @@
     "image": "wall1.png",
     "stats": {
       "durability": 100,
-      "damaged": 100,
-      "strength": 100,
+      "damaged": 10,
+      "strength": 0,
       "attack": 0,
-      "defense": 100,
+      "defense": 0,
       "water_damage": 0,
-      "water_defense": 40,
+      "water_defense": 0,
       "fire_damage": 0,
-      "fire_defense": 30,
+      "fire_defense": 0,
       "earth_damage": 0,
-      "earth_defense": 100
-    }
+      "earth_defense": 0
+    },
+    "damage_items": [
+      "pickaxe_basic"
+    ]
   }
 ]

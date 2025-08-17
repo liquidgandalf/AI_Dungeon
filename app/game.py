@@ -71,6 +71,7 @@ def enemy_occupied_cells() -> Dict[Tuple[int,int], str]:
 
 # Cache of enemy type definitions by type id for rendering pings
 _ENEMY_TYPE_MAP: Dict[str, Dict[str, Any]] = {}
+_WALL_TYPE_MAP: Dict[str, Dict[str, Any]] = {}
 
 def clamp(v: int, lo: int, hi: int) -> int:
     return max(lo, min(hi, int(v)))
@@ -144,6 +145,17 @@ def get_enemy_type_map() -> Dict[str, Dict[str, Any]]:
         except Exception:
             _ENEMY_TYPE_MAP = {}
     return _ENEMY_TYPE_MAP
+
+def get_wall_type_map() -> Dict[str, Dict[str, Any]]:
+    """Load and cache wall type definitions keyed by 'type'."""
+    global _WALL_TYPE_MAP
+    if not _WALL_TYPE_MAP:
+        try:
+            types = game_config.get_wall_types()
+            _WALL_TYPE_MAP = {t.get('type'): t for t in types if t.get('type')}
+        except Exception:
+            _WALL_TYPE_MAP = {}
+    return _WALL_TYPE_MAP
 
 
 def render_enemy_pings(screen: pygame.surface.Surface, visible: List[List[bool]] = None):
@@ -256,6 +268,9 @@ biomes: List[List[int]] = []
 biome_centers: List[Tuple[int,int,int]] = []  # (cx, cy, biome_id)
 biome_radius: int = 0
 
+# Wall type id per tile (string from wall_types.json); empty string for non-walls
+wall_type_id: List[List[str]] = []
+
 # Simple biome -> sky RGB palette (0..6), aligned with board biome_colors
 BIOME_SKY_COLORS: Dict[int, Tuple[int,int,int]] = {
     0: (0, 0, 0),         # no biome -> black sky
@@ -276,7 +291,7 @@ def biome_sky_colour_at(cx: int, cy: int) -> Tuple[int,int,int]:
 
 
 def init_grid_once():
-    global grid, biomes, wall_hp, WALL_HP_BASE, WALL_HP_PER_BIOME
+    global grid, biomes, wall_hp, WALL_HP_BASE, WALL_HP_PER_BIOME, wall_type_id
     if grid is not None:
         return
     # Start all walls
@@ -293,15 +308,24 @@ def init_grid_once():
         WALL_HP_PER_BIOME = int(walls_cfg.get('hp_per_biome', 1))
     except Exception:
         WALL_HP_BASE, WALL_HP_PER_BIOME = 3, 1
-    # Helper to compute local max hp based on biome id
-    def _hp_max_at(x: int, y: int) -> int:
-        try:
-            bid = int(biomes[y][x])
-        except Exception:
-            bid = 0
-        return max(1, int(WALL_HP_BASE + WALL_HP_PER_BIOME * bid))
-    # Initialize wall hp grid now that biomes exist
-    wall_hp = [[((_hp_max_at(x, y)) if grid[y][x] == WALL else 0) for x in range(GRID_W)] for y in range(GRID_H)]
+    # Initialize wall type grid to default type for all wall tiles
+    try:
+        wt_map = get_wall_type_map()
+        # pick first defined type or fallback to 'stone1'
+        default_type = next(iter(wt_map.keys()), 'stone1')
+    except Exception:
+        wt_map = {}
+        default_type = 'stone1'
+    # Initialize wall hp grid using wall type durability (stats.durability)
+    def _hp_max_for_type(wt_id: str) -> int:
+        info = (wt_map.get(wt_id) or {})
+        stats = (info.get('stats') or {})
+        return max(1, int(stats.get('durability', 1) or 1))
+    # Build wall type id grid and wall hp grid
+    # For now all walls are default_type
+    # Later we can vary by biome/region
+    wall_hp = [[((_hp_max_for_type(default_type)) if grid[y][x] == WALL else 0) for x in range(GRID_W)] for y in range(GRID_H)]
+    wall_type_id = [[(default_type if grid[y][x] == WALL else '') for x in range(GRID_W)] for y in range(GRID_H)]
 
 def generate_biomes() -> List[List[int]]:
     """Create biome ids per tile (0..6). 0 = default. 1..6 = colored biomes.
@@ -465,20 +489,33 @@ def rebuild_solid_cells():
 
 
 def backpack_capacity_for_player(pdata: Dict[str, Any]) -> float:
+    """Return capacity based on equipped backpack instance (resolve to type id)."""
     eq = pdata.get('equipment') or {}
-    bp_id = eq.get('backpack')
-    return backpack_capacity(bp_id) if bp_id else 0.0
+    inst_id = eq.get('backpack')
+    if not inst_id:
+        return 0.0
+    items_map = pdata.get('items') or {}
+    type_id = (items_map.get(inst_id) or {}).get('type')
+    return backpack_capacity(type_id) if type_id else 0.0
 
 
-def try_add_to_backpack(pdata: Dict[str, Any], item_id: str) -> bool:
+def try_add_instance_to_backpack(pdata: Dict[str, Any], inst_id: str) -> bool:
+    """Store an item instance into inventory if there's backpack capacity.
+    Computes weight from the instance's type.
+    """
     cap = backpack_capacity_for_player(pdata)
     if cap <= 0:
         return False
     used = float(pdata.get('backpack_weight_used', 0.0))
-    w = float(get_weight(item_id))
+    items_map = pdata.get('items') or {}
+    t_id = (items_map.get(inst_id) or {}).get('type')
+    if not isinstance(t_id, str):
+        return False
+    w = float(get_weight(t_id))
     if used + w <= cap + 1e-6:
         inv = pdata.setdefault('inventory', [])
-        inv.append(item_id)
+        if inst_id not in inv:
+            inv.append(inst_id)
         pdata['backpack_weight_used'] = used + w
         return True
     return False
@@ -1210,10 +1247,14 @@ def run_game(screen: pygame.surface.Surface, qr_surface: pygame.surface.Surface)
             # Process pending hand action (e.g., pickaxe breaking a wall)
             act = players.get(sid, {}).pop('pending_action', None)
             if act in ('left', 'right'):
-                # Determine equipped item in that hand
-                eq = (players.get(sid, {}).get('equipment') or {})
-                item_id = eq.get(f'{act}_hand')
-                it = ITEM_DB.get(item_id or '') or {}
+                # Determine equipped instance in that hand
+                pdata_srv = players.get(sid, {})
+                eq = (pdata_srv.get('equipment') or {})
+                items_map = (pdata_srv.get('items') or {})
+                inst_id = eq.get(f'{act}_hand')
+                inst = (items_map.get(inst_id) or {}) if inst_id else {}
+                type_id = (inst.get('type') or '') if inst else ''
+                it = ITEM_DB.get(type_id or '') or {}
                 stats = it.get('stats') or {}
                 wall_damage = int(stats.get('wall_damage', 0) or 0)
                 if wall_damage > 0:
@@ -1233,19 +1274,125 @@ def run_game(screen: pygame.surface.Surface, qr_surface: pygame.surface.Surface)
                     did_hit = False
                     if 0 <= tx < GRID_W and 0 <= ty < GRID_H:
                         if grid[ty][tx] == WALL:
-                            # apply damage to wall hp (use per-tile max via biome)
+                            # Check wall type damage gating
+                            allow = True
                             try:
-                                bid_hit = int(biomes[ty][tx])
+                                wt = wall_type_id[ty][tx] if wall_type_id else ''
+                                wt_info = get_wall_type_map().get(wt) or {}
+                                dmg_list = wt_info.get('damage_items')
+                                if isinstance(dmg_list, list):
+                                    allow = (type_id in dmg_list)
                             except Exception:
-                                bid_hit = 0
-                            max_loc = max(1, int(WALL_HP_BASE + WALL_HP_PER_BIOME * bid_hit))
-                            if wall_hp[ty][tx] <= 0:
-                                wall_hp[ty][tx] = max_loc
-                            wall_hp[ty][tx] = max(0, wall_hp[ty][tx] - wall_damage)
-                            if wall_hp[ty][tx] <= 0:
-                                grid[ty][tx] = EMPTY
-                                wall_hp[ty][tx] = 0
-                            did_hit = True
+                                allow = True
+                            if not allow:
+                                # Not effective on this wall type
+                                did_hit = False
+                            else:
+                                # apply damage to wall hp using wall type durability
+                                try:
+                                    wt = wall_type_id[ty][tx] if wall_type_id else ''
+                                    wt_info = get_wall_type_map().get(wt) or {}
+                                    wt_stats = (wt_info.get('stats') or {})
+                                except Exception:
+                                    wt_stats = {}
+                                max_loc = max(1, int((wt_stats.get('durability', 1) or 1)))
+                                if wall_hp[ty][tx] <= 0:
+                                    wall_hp[ty][tx] = max_loc
+                                wall_hp[ty][tx] = max(0, wall_hp[ty][tx] - wall_damage)
+                                if wall_hp[ty][tx] <= 0:
+                                    grid[ty][tx] = EMPTY
+                                    wall_hp[ty][tx] = 0
+                                # tool durability loss: wall returns damage to the specific instance
+                                try:
+                                    # Ensure instance has durability field initialized
+                                    if inst_id and inst is not None and ('durability' not in inst):
+                                        base_dur = int((it.get('stats') or {}).get('durability', 0) or 0)
+                                        inst['durability'] = base_dur
+                                        items_map[inst_id] = inst
+                                    # wall deals its damage to the tool instance
+                                    # walls.json uses 'damaged' (how much they inflict back); fall back to 'damage'
+                                    td = wt_stats.get('damage')
+                                    if td is None:
+                                        td = wt_stats.get('damaged')
+                                    tool_damage = int(td or 0)
+                                    if tool_damage > 0 and inst_id:
+                                        cur = int((inst or {}).get('durability') or 0)
+                                        new_dur = max(0, cur - tool_damage)
+                                        inst['durability'] = new_dur
+                                        items_map[inst_id] = inst
+                                        if new_dur <= 0:
+                                            # break the tool: unequip and remove instance from inventory/map
+                                            slot_key = f'{act}_hand'
+                                            if players[sid]['equipment'].get(slot_key) == inst_id:
+                                                players[sid]['equipment'][slot_key] = None
+                                            # Remove instance from inventory if present
+                                            try:
+                                                inv = players[sid].get('inventory') or []
+                                                if inst_id in inv:
+                                                    inv.remove(inst_id)
+                                            except Exception:
+                                                pass
+                                            # Remove the instance record
+                                            (players.get(sid, {}).get('items') or {}).pop(inst_id, None)
+                                            # emit equipment snapshot (include durability info for HUD)
+                                            try:
+                                                def _equip_payload(pmap):
+                                                    out_types = {}
+                                                    out_insts = {}
+                                                    # rich objects per slot for durability-aware HUD
+                                                    rich = {}
+                                                    for k, iid in (pmap.get('equipment') or {}).items():
+                                                        out_insts[k] = iid or None
+                                                        if iid:
+                                                            ii = (pmap.get('items') or {}).get(iid) or {}
+                                                            t_id = ii.get('type')
+                                                            itdef = ITEM_DB.get(t_id or '') or {}
+                                                            stats = itdef.get('stats') or {}
+                                                            out_types[k] = t_id
+                                                            rich[k] = {
+                                                                'id': t_id,
+                                                                'name': itdef.get('name'),
+                                                                'durability': int(ii.get('durability') or 0),
+                                                                'max_durability': int(stats.get('durability') or 0),
+                                                            }
+                                                        else:
+                                                            out_types[k] = None
+                                                            rich[k] = None
+                                                    return out_types, out_insts, rich
+                                                eq_types, eq_insts, eq_rich = _equip_payload(players[sid])
+                                                socketio.emit('equip', {'equipment': eq_rich, 'equipment_instances': eq_insts}, to=sid)
+                                            except Exception:
+                                                pass
+                                        else:
+                                            # tool damaged but not broken -> emit updated equip snapshot for live HUD update
+                                            try:
+                                                def _equip_payload(pmap):
+                                                    out_insts = {}
+                                                    rich = {}
+                                                    for k, iid in (pmap.get('equipment') or {}).items():
+                                                        out_insts[k] = iid or None
+                                                        if iid:
+                                                            ii = (pmap.get('items') or {}).get(iid) or {}
+                                                            t_id = ii.get('type')
+                                                            itdef = ITEM_DB.get(t_id or '') or {}
+                                                            stats = itdef.get('stats') or {}
+                                                            rich[k] = {
+                                                                'id': t_id,
+                                                                'name': itdef.get('name'),
+                                                                'durability': int(ii.get('durability') or 0),
+                                                                'max_durability': int(stats.get('durability') or 0),
+                                                            }
+                                                        else:
+                                                            rich[k] = None
+                                                    return out_insts, rich
+                                                eq_insts, eq_rich = _equip_payload(players[sid])
+                                                socketio.emit('equip', {'equipment': eq_rich, 'equipment_instances': eq_insts}, to=sid)
+                                            except Exception:
+                                                pass
+                                except Exception:
+                                    # Ignore durability update errors to avoid breaking gameplay
+                                    pass
+                                did_hit = True
 
                     # Emit a simple FX event on successful hit (client will render overlay)
                     if did_hit:
@@ -1263,29 +1410,7 @@ def run_game(screen: pygame.surface.Surface, qr_surface: pygame.surface.Surface)
                         except Exception:
                             pass
 
-                    # Durability: decrement on a successful hit, then unequip if broken
-                    if did_hit and item_id:
-                        pdata = players.get(sid, {})
-                        dur = (pdata.setdefault('durability', {}) or {}).get(f'{act}_hand')
-                        if dur is None:
-                            # initialize from item stats or default 1
-                            dur = int((stats.get('durability') or 1))
-                        # Decrement by 1 per hit for now
-                        dur = int(dur) - 1
-                        pdata['durability'][f'{act}_hand'] = max(0, dur)
-                        if dur <= 0:
-                            # Try to move item to backpack; else drop near player
-                            stored = try_add_to_backpack(pdata, item_id)
-                            if not stored:
-                                drop_item_near(cx, cy, item_id)
-                            # Unequip
-                            eq[f'{act}_hand'] = None
-                            pdata['durability'].pop(f'{act}_hand', None)
-                            # Notify client of equipment change (HUD)
-                            try:
-                                socketio.emit('equip', {'equipment': {k: v for k, v in eq.items()}}, to=sid)
-                            except Exception:
-                                pass
+                    # Per-hit degradation is handled by wall return damage above (instance-based).
 
             # draw player square and facing highlight
             px, py = player_state[sid]['pos']

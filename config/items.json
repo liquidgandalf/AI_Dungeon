@@ -88,7 +88,7 @@
       "weight": 3.5,
       "attack": 2,
       "durability": 100,
-      "wall_damage": 10
+      "wall_damage": 50
     }
   },
   {

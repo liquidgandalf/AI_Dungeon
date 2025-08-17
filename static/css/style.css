@@ -58,9 +58,11 @@ button { padding: 12px 16px; font-size: 18px; border-radius: 8px; border: none; 
   flex-direction: column-reverse; /* bottom segments are index 0/1 (red) */
   justify-content: flex-start;
   gap: 1px;             /* 1px divider */
+  z-index: 2;           /* render above button background */
+  pointer-events: none; /* don't block taps */
 }
-#leftAction .durBar { left: -8px; }
-#rightAction .durBar { right: -8px; }
+#leftAction .durBar { left: 4px; }
+#rightAction .durBar { right: 4px; }
 
 .durSeg {
   width: 100%;
