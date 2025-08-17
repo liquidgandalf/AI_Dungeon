@@ -4,17 +4,17 @@
     "name": "Stone Wall",
     "image": "wall1.png",
     "stats": {
-      "durability": 220,
-      "damaged": 220,
-      "strength": 180,
+      "durability": 100,
+      "damaged": 100,
+      "strength": 100,
       "attack": 0,
-      "defense": 180,
+      "defense": 100,
       "water_damage": 0,
       "water_defense": 40,
       "fire_damage": 0,
       "fire_defense": 30,
       "earth_damage": 0,
-      "earth_defense": 200
+      "earth_defense": 100
     }
   }
 ]

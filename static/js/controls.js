@@ -142,6 +142,101 @@
   let lastState = null;
   // HUD equip cache (ids)
   let hudEquip = { left: null, right: null };
+  // Do not draw held-item icon on the 3D canvas anymore; icons overlay action buttons instead
+  const SHOW_CANVAS_HAND_ICON = false;
+
+  // Create overlay <img> elements on action buttons to show held item icons
+  function ensureHandIconImg(btn){
+    if (!btn) return null;
+    let img = btn.querySelector('img.handIcon');
+    if (!img){
+      img = document.createElement('img');
+      img.className = 'handIcon';
+      img.alt = '';
+      img.draggable = false;
+      btn.appendChild(img);
+    }
+    return img;
+  }
+
+  const leftHandImg = ensureHandIconImg(leftActionBtn);
+  const rightHandImg = ensureHandIconImg(rightActionBtn);
+
+  function setHandIcon(side, itemId){
+    const icon = itemIconPath(itemId);
+    const el = side === 'left' ? leftHandImg : rightHandImg;
+    if (!el) return;
+    if (icon){
+      el.style.display = '';
+      el.src = '/static/img/' + icon.replace(/^\/+/, '');
+    } else {
+      el.style.display = 'none';
+      el.removeAttribute('src');
+    }
+  }
+
+  function updateHandIcons(){
+    setHandIcon('left', hudEquip.left);
+    setHandIcon('right', hudEquip.right);
+  }
+
+  // Durability bars beside action buttons
+  function ensureDurBar(btn){
+    if (!btn) return null;
+    let bar = btn.querySelector('.durBar');
+    if (!bar){
+      bar = document.createElement('div');
+      bar.className = 'durBar';
+      // create 10 segments, bottom-most first
+      for (let i = 0; i < 10; i++){
+        const seg = document.createElement('div');
+        seg.className = 'durSeg ' + (i < 2 ? 'red' : 'green');
+        bar.appendChild(seg);
+      }
+      btn.appendChild(bar);
+    }
+    return bar;
+  }
+
+  const leftDurBar = ensureDurBar(leftActionBtn);
+  const rightDurBar = ensureDurBar(rightActionBtn);
+
+  function setDurBar(side, fraction){
+    const bar = side === 'left' ? leftDurBar : rightDurBar;
+    const img = side === 'left' ? leftHandImg : rightHandImg;
+    if (!bar) return;
+    const segs = bar.querySelectorAll('.durSeg');
+    if (!segs || !segs.length) return;
+    let f = typeof fraction === 'number' && isFinite(fraction) ? Math.max(0, Math.min(1, fraction)) : 1;
+    const filledCount = Math.round(f * 10);
+    segs.forEach((seg, idx) => {
+      if (idx < filledCount) seg.classList.add('filled'); else seg.classList.remove('filled');
+    });
+    // hide if nothing equipped
+    bar.style.display = (fraction == null && typeof fraction !== 'number') ? 'none' : '';
+    // if durability is zero, hide the icon overlay to reflect broken item visually
+    if (img) img.style.display = f === 0 ? 'none' : '';
+  }
+
+  function extractDurInfo(item){
+    if (!item) return { id: null, frac: null };
+    if (typeof item === 'string') return { id: item, frac: null };
+    try {
+      const id = item.id || item.type || null;
+      const stats = item.stats || {};
+      const cur = item.durability_current ?? item.durability ?? stats.durability_current ?? null;
+      const max = item.max_durability ?? stats.durability ?? null;
+      let frac = null;
+      if (typeof cur === 'number' && typeof max === 'number' && max > 0){
+        frac = Math.max(0, Math.min(1, cur / max));
+      } else if (typeof cur === 'number' && cur <= 1) {
+        frac = Math.max(0, Math.min(1, cur));
+      }
+      return { id, frac };
+    } catch(_) {
+      return { id: null, frac: null };
+    }
+  }
 
   function showPad(show){
     padDiv.style.display = show ? 'block' : 'none';
@@ -742,8 +837,8 @@
       }
     }
 
-    // HUD: draw right-hand item icon (bottom-right)
-    if (hudEquip && hudEquip.right){
+    // HUD: draw right-hand item icon (bottom-right) [disabled -> shown on action button instead]
+    if (SHOW_CANVAS_HAND_ICON && hudEquip && hudEquip.right){
       const iconPath = itemIconPath(hudEquip.right);
       const size = Math.max(16, Math.floor(Math.min(w, h) * 0.16));
       const pad = Math.max(3, Math.floor(size * 0.12));
@@ -851,18 +946,34 @@
     // Update HUD equip from state payload if present
     try {
       const eq = (data && data.equipment) || {};
-      hudEquip.left = eq.left_hand && eq.left_hand.id ? eq.left_hand.id : null;
-      hudEquip.right = eq.right_hand && eq.right_hand.id ? eq.right_hand.id : null;
-    } catch(_){}
+      const L = extractDurInfo(eq.left_hand);
+      const R = extractDurInfo(eq.right_hand);
+      hudEquip.left = L.id;
+      hudEquip.right = R.id;
+      setDurBar('left', L.frac);
+      setDurBar('right', R.frac);
+    } catch(_){
+      setDurBar('left', null);
+      setDurBar('right', null);
+    }
+    updateHandIcons();
   });
 
   // Lightweight equip snapshot for HUD (sent on join)
   socket.on('equip', (data) => {
     try {
       const eq = (data && data.equipment) || {};
-      hudEquip.left = eq.left_hand || null;
-      hudEquip.right = eq.right_hand || null;
-    } catch(_){}
+      const L = extractDurInfo(eq.left_hand);
+      const R = extractDurInfo(eq.right_hand);
+      hudEquip.left = L.id;
+      hudEquip.right = R.id;
+      setDurBar('left', L.frac);
+      setDurBar('right', R.frac);
+    } catch(_){
+      setDurBar('left', null);
+      setDurBar('right', null);
+    }
+    updateHandIcons();
   });
 
   // Receive cooldown updates from server

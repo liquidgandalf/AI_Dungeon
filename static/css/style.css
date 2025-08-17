@@ -27,6 +27,46 @@ button { padding: 12px 16px; font-size: 18px; border-radius: 8px; border: none; 
 }
 
 /* Sizes match provided assets */
-#leftAction { width: 128px; height: 128px; background-image: url('/static/img/items/left_hand.png'); }
-#rightAction { width: 128px; height: 128px; background-image: url('/static/img/items/right_hand.png'); }
+#leftAction { position: relative; width: 128px; height: 128px; background-image: url('/static/img/items/left_hand.png'); }
+#rightAction { position: relative; width: 128px; height: 128px; background-image: url('/static/img/items/right_hand.png'); }
 #openInventory { width: 64px; height: 128px; background-image: url('/static/img/items/inventory.png'); }
+
+/* Overlaid held-item icon on action buttons */
+#leftAction img.handIcon,
+#rightAction img.handIcon {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 72%;
+  height: 72%;
+  object-fit: contain;
+  image-rendering: pixelated;
+  pointer-events: none;
+  filter: drop-shadow(0 1px 0 rgba(0,0,0,0.5));
+}
+
+/* Slim vertical durability bars beside action buttons */
+#leftAction .durBar,
+#rightAction .durBar {
+  position: absolute;
+  width: 5px;           /* requested width */
+  height: 110px;        /* ~10 bars + gaps -> fits under 128px */
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column-reverse; /* bottom segments are index 0/1 (red) */
+  justify-content: flex-start;
+  gap: 1px;             /* 1px divider */
+}
+#leftAction .durBar { left: -8px; }
+#rightAction .durBar { right: -8px; }
+
+.durSeg {
+  width: 100%;
+  height: 10px;         /* 10 segments of 10px each -> 100px + 9px gaps ~ 109px */
+  opacity: 0.2;         /* unfilled */
+}
+.durSeg.filled { opacity: 1; }
+.durSeg.red { background: #e33; }
+.durSeg.green { background: #3c3; }
