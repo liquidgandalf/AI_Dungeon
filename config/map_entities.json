@@ -1,0 +1,8 @@
+[
+  { "type": "item", "item_id": "chest_basic", "pos": [6.5, 6.5],
+    "sprite": { "image": "items/chest.png", "base_width": 64, "base_height": 64, "scale": 1.0, "y_offset": 0 } },
+  { "type": "enemy", "enemy_type": "goblin_basic", "pos": [10.5, 5.5],
+    "sprite": { "sheet": "enemies/goblin.png", "base_width": 64, "base_height": 64, "scale": 1.0, "y_offset": 0, "directions": 8,
+      "states": { "idle": { "frames": [[0,0],[1,0],[2,0],[3,0]], "frame_ms": 180 } } },
+    "ai": { "state": "idle" } }
+]

@@ -1,0 +1,74 @@
+[
+  {
+    "type": "slime_green",
+    "name": "Green Slime",
+    "image": "slime_green.png",
+    "pingcolour": [80, 200, 120],
+    "biome": null,
+    "spawner": null,
+    "stats": {
+      "durability": 80,
+      "damaged": 80,
+      "strength": 40,
+      "stamina": 100,
+      "health": 120,
+      "speed": 64,
+      "attack": 20,
+      "defense": 10,
+      "water_damage": 0,
+      "water_defense": 10,
+      "fire_damage": 0,
+      "fire_defense": -10,
+      "earth_damage": 5,
+      "earth_defense": 15
+    }
+  },
+  {
+    "type": "slime_blue",
+    "name": "Blue Slime",
+    "image": "slime_blue.png",
+    "pingcolour": [80, 140, 255],
+    "biome": null,
+    "spawner": null,
+    "stats": {
+      "durability": 70,
+      "damaged": 70,
+      "strength": 35,
+      "stamina": 110,
+      "health": 110,
+      "speed": 64,
+      "attack": 18,
+      "defense": 8,
+      "water_damage": 8,
+      "water_defense": 20,
+      "fire_damage": -2,
+      "fire_defense": -15,
+      "earth_damage": 3,
+      "earth_defense": 10
+    }
+  },
+  {
+    "type": "slime_red",
+    "name": "Red Slime",
+    "image": "slime_red.png",
+    "pingcolour": [220, 80, 80],
+    "biome": null,
+    "spawner": null,
+    "stats": {
+      "durability": 90,
+      "damaged": 90,
+      "strength": 50,
+      "stamina": 90,
+      "health": 130,
+      "speed": 64,
+      "attack": 24,
+      "defense": 8,
+      "water_damage": -2,
+      "water_defense": -20,
+      "fire_damage": 12,
+      "fire_defense": 10,
+      "earth_damage": 4,
+      "earth_defense": 8
+    }
+  }
+]

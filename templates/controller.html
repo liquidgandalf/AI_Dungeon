@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Controller</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <link rel="stylesheet" href="/static/css/style.css">
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <script>const defaultName = "{{ default_name }}";</script>
+  <script defer src="/static/js/controls.js"></script>
+</head>
+<body>
+  <div class="container">
+    <h1>Join</h1>
+    <div id="join">
+      <input id="name" type="text" placeholder="Your name" maxlength="12" value="{{ default_name }}">
+      <button id="joinBtn">Join</button>
+    </div>
+
+    <div id="pad" class="pad" style="display:none;">
+      <div class="row" style="justify-content:center;">
+        <canvas id="view3d" width="200" height="160" style="border:1px solid #333; max-width:100%;"></canvas>
+      </div>
+      <div class="row" style="gap:12px; justify-content:center;">
+        <button id="leftAction" class="btn alt" aria-label="Left Action"><span class="sr">Left Action</span></button>
+        <button id="openInventory" class="btn alt" aria-label="Inventory"><span class="sr">Inventory</span></button>
+        <button id="rightAction" class="btn alt" aria-label="Right Action"><span class="sr">Right Action</span></button>
+      </div>
+      <!-- Cooldown Timer Bar -->
+      <div id="cooldownWrap" style="height:10px; background:#333; border-radius:6px; overflow:hidden; margin:8px 0 12px 0;">
+        <div id="cooldownBar" style="height:100%; width:0%; background:#4caf50;"></div>
+      </div>
+      <div class="row">
+        <button class="btn" data-cmd="up">⬆️</button>
+      </div>
+      <div class="row">
+        <button class="btn" data-cmd="left">⬅️</button>
+        <div class="spacer"></div>
+        <button class="btn" data-cmd="right">➡️</button>
+      </div>
+      <div class="row">
+        <button class="btn" data-cmd="down">⬇️</button>
+      </div>
+      <div class="row">
+        <button id="leave" class="leave">Leave</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Inventory Overlay -->
+  <div id="inventoryOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); color:#eee;">
+    <div style="max-width:420px; margin:40px auto; background:#222; padding:16px; border-radius:8px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <h2 style="margin:0; font-size:18px;">Inventory</h2>
+        <button id="closeInventory" class="btn alt">Close</button>
+      </div>
+      <div id="equipSummary" style="font-size:14px; margin-bottom:10px;"></div>
+      <div style="display:flex; gap:8px; margin-bottom:10px;">
+        <button id="tabBackpack" class="btn alt">Backpack</button>
+        <button id="tabStats" class="btn alt">Player Stats</button>
+        <button id="tabLoadout" class="btn alt">Loadout</button>
+      </div>
+      <div id="backpackGrid" style="display:grid; grid-template-columns: repeat(3, 1fr); gap:8px;"></div>
+      <div id="statsView" style="display:none; margin-top:8px; font-size:14px;"></div>
+      <div id="loadoutView" style="display:none; margin-top:8px; font-size:14px;"></div>
+      <div style="margin-top:12px; font-size:12px; color:#bbb;">Greyed slots are locked until you find a larger backpack.</div>
+    </div>
+  </div>
+</body>
+</html>

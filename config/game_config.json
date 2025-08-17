@@ -1,0 +1,17 @@
+{
+  "initial_attributes_count": 10,
+  "speed": {
+    "maxspeedpermove": 1,
+    "minspeed": 1,
+    "max_speed_stat": 16,
+    "min_speed_stat": 1
+  },
+  "spawns": { "random_items": 0, "random_chests": 60, "random_enemies": 25 },
+  "biomes": { "count": 6, "radius": 40 },
+  "visibility": {
+    "mode": "reveal",
+    "reveal_radius": 6,
+    "enemies": true,
+    "enemy_pings": true
+  }
+}

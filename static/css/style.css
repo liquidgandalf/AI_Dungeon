@@ -1,0 +1,32 @@
+/* SkeletonGame/static/css/style.css */
+:root { --bg:#111; --fg:#eee; --accent:#0af; }
+* { box-sizing: border-box; font-family: system-ui, sans-serif; }
+html, body { margin:0; padding:0; background:var(--bg); color:var(--fg); }
+.container { max-width: 480px; margin: 0 auto; padding: 16px; }
+h1 { font-size: 20px; margin: 12px 0; }
+input { width: 100%; padding: 12px; font-size: 18px; border-radius: 8px; border: 1px solid #333; background:#000; color:var(--fg); }
+button { padding: 12px 16px; font-size: 18px; border-radius: 8px; border: none; background: var(--accent); color:#000; }
+
+.pad { margin-top: 16px; }
+.row { display: flex; justify-content: center; align-items: center; gap: 16px; margin: 12px 0; }
+.btn { width: 96px; height: 64px; font-size: 28px; }
+.spacer { width: 32px; }
+.leave { background:#f33; color:#fff; }
+
+/* Screen-reader only text */
+.sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+
+/* Icon buttons for phone actions */
+#leftAction, #rightAction, #openInventory {
+  background-color: transparent;
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: contain;
+  border: none;
+  color: transparent; /* hide fallback text visually */
+}
+
+/* Sizes match provided assets */
+#leftAction { width: 128px; height: 128px; background-image: url('/static/img/items/left_hand.png'); }
+#rightAction { width: 128px; height: 128px; background-image: url('/static/img/items/right_hand.png'); }
+#openInventory { width: 64px; height: 128px; background-image: url('/static/img/items/inventory.png'); }

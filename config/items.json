@@ -1,0 +1,101 @@
+[
+  {
+    "id": "backpack_small",
+    "name": "Small Backpack",
+    "allowed_slots": ["backpack"],
+    "active": 0,
+    "spawn_type": null,
+    "stats": {
+      "weight": 1.0,
+      "durability": 100,
+      "capacity_weight": 15.0
+    }
+  },
+  {
+    "id": "sword_basic",
+    "name": "Iron Sword",
+    "allowed_slots": ["left_hand", "right_hand"],
+    "active": 0,
+    "spawn_type": null,
+    "stats": {
+      "weight": 3.0,
+      "attack": 5,
+      "defense": 0,
+      "durability": 80,
+      "water_damage": 0,
+      "fire_damage": 0,
+      "earth_damage": 0
+    }
+  },
+  {
+    "id": "shield_wood",
+    "name": "Wooden Shield",
+    "allowed_slots": ["left_hand", "right_hand"],
+    "active": 0,
+    "spawn_type": null,
+    "stats": {
+      "weight": 4.0,
+      "attack": 0,
+      "defense": 4,
+      "durability": 60,
+      "earth_defense": 2
+    }
+  },
+  {
+    "id": "helmet_leather",
+    "name": "Leather Cap",
+    "allowed_slots": ["head"],
+    "active": 0,
+    "spawn_type": null,
+    "stats": {
+      "weight": 1.0,
+      "defense": 1,
+      "durability": 50
+    }
+  },
+  {
+    "id": "boots_leather",
+    "name": "Leather Boots",
+    "allowed_slots": ["feet"],
+    "active": 0,
+    "spawn_type": null,
+    "stats": {
+      "weight": 1.2,
+      "defense": 1,
+      "durability": 50
+    }
+  },
+  {
+    "id": "armor_cloth",
+    "name": "Cloth Armor",
+    "allowed_slots": ["body"],
+    "active": 0,
+    "spawn_type": null,
+    "stats": {
+      "weight": 2.0,
+      "defense": 2,
+      "durability": 70
+    }
+  },
+  {
+    "id": "pickaxe_basic",
+    "name": "Pickaxe",
+    "allowed_slots": ["left_hand", "right_hand"],
+    "active": 0,
+    "spawn_type": null,
+    "stats": {
+      "weight": 3.5,
+      "attack": 2,
+      "durability": 100,
+      "wall_damage": 10
+    }
+  },
+  {
+    "id": "demon_spawn",
+    "name": "Demon Spawner",
+    "allowed_slots": [],
+    "active": 1,
+    "spawn_type": "slime_green",
+    "stats": {}
+  }
+]
