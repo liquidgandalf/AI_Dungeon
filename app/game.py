@@ -888,8 +888,8 @@ def run_game(screen: pygame.surface.Surface, qr_surface: pygame.surface.Surface)
     font = pygame.font.SysFont(None, 26)
     running = True
     # Raycast render params
-    RC_FOV = math.radians(60)
-    RC_NUM_RAYS = 200
+    RC_FOV = math.radians(90)
+    RC_NUM_RAYS = 400
     RC_W = RC_NUM_RAYS
     RC_H = 160
     RC_MAX_DIST = math.hypot(GRID_W, GRID_H)
