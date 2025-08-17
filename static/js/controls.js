@@ -550,6 +550,7 @@
   }
 
   // Draw per-column frame data (heights and shades) onto canvas, then sprites
+  let _lastSpriteLogTs = 0;
   socket.on('frame', (data) => {
     if (!ctx || !data) return;
     const w = data.w|0, h = data.h|0;
@@ -557,6 +558,17 @@
     const shades = data.shades || [];
     const dists = data.dists || [];
     const sprites = data.sprites || [];
+    // Occasional debug: how many player sprites arrived and sample path
+    try {
+      const nowMs = performance.now();
+      if (nowMs - _lastSpriteLogTs > 1000) {
+        const ps = sprites.filter(s => s && s.kind === 'player');
+        if (ps.length) {
+          console.debug('[frame] player sprites:', ps.length, 'example img:', ps[0].img);
+          _lastSpriteLogTs = nowMs;
+        }
+      }
+    } catch(_){}
     if (view3d.width !== w || view3d.height !== h) {
       view3d.width = w;
       view3d.height = h;
@@ -684,6 +696,20 @@
       const sx = s.sx|0, sy = s.sy|0, sw = s.sw|0, sh = s.sh|0;
       const dx0 = s.x|0, dy0 = s.y|0, dw = s.w|0, dh = s.h|0;
       if (!dw || !dh) continue;
+      // If image not ready yet, draw a temporary placeholder block for visibility
+      if (!img || !img.complete || !img.naturalWidth) {
+        try {
+          ctx.save();
+          ctx.globalAlpha = 0.65;
+          ctx.fillStyle = s.kind === 'player' ? '#ff00aa' : '#888';
+          ctx.fillRect(dx0, dy0, dw, dh);
+          ctx.strokeStyle = '#000';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(dx0, dy0, dw, dh);
+          ctx.restore();
+        } catch(_){}
+        continue;
+      }
       // Column-wise occlusion using dists buffer
       for (let i = 0; i < dw; i++){
         const x = dx0 + i;

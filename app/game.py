@@ -1575,6 +1575,66 @@ def run_game(screen: pygame.surface.Surface, qr_surface: pygame.surface.Surface)
                     'x': x, 'y': y, 'w': out_w, 'h': out_h, 'depth': dist
                 })
 
+            # Add other players as billboard sprites (use recolored sprite if available)
+            for other_sid, op in list(players.items()):
+                if other_sid == sid:
+                    continue  # don't render the viewing player as a sprite
+                ost = player_state.get(other_sid)
+                if not ost:
+                    continue
+                ocx, ocy = ost.get('cell', (None, None))
+                if ocx is None or ocy is None:
+                    continue
+                # Player center in cell space
+                ex = float(ocx) + 0.5
+                ey = float(ocy) + 0.5
+                dx = ex - px
+                dy = ey - py
+                dist = math.hypot(dx, dy)
+                if dist <= 1e-3:
+                    continue
+                ang_to = math.atan2(dy, dx)
+                rel = angle_diff(ang_to, angle)
+                # Cull outside FOV (+ small margin)
+                if abs(rel) > (RC_FOV/2 + math.radians(10)):
+                    continue
+                norm = (rel + RC_FOV/2) / RC_FOV
+                ray_x = int(norm * (RC_NUM_RAYS - 1))
+                ray_x = max(0, min(RC_NUM_RAYS - 1, ray_x))
+
+                # Resolve sprite path: recolored if available, else base character
+                img_path = None
+                sp = (op or {}).get('sprite_path')
+                if isinstance(sp, str) and sp:
+                    # convert '/static/img/...' to relative '...'
+                    prefix = '/static/img/'
+                    img_path = sp[len(prefix):] if sp.startswith(prefix) else sp.lstrip('/')
+                if not img_path:
+                    ch = (op or {}).get('character') or 'girl_elf'
+                    img_path = f"players/{ch}.png"
+
+                # Source sprite nominal size (PNG portrait 128x256); normalize scale
+                base_w = 128
+                base_h = 256
+                # 0.25 brings 256-high sources down to match 64-high baseline scaling
+                scale = 0.25
+                y_off = 0
+
+                base = RC_H / max(1e-3, dist)
+                out_h = int(base * (base_h / 64.0) * scale)
+                out_h = max(1, min(3 * RC_H, out_h))
+                aspect = base_w / max(1, base_h)
+                out_w = int(out_h * aspect)
+                center_x = ray_x
+                x = center_x - out_w // 2
+                y = (RC_H - out_h) // 2 - y_off
+
+                sprites.append({
+                    'img': img_path, 'sx': 0, 'sy': 0, 'sw': base_w, 'sh': base_h,
+                    'x': x, 'y': y, 'w': out_w, 'h': out_h, 'depth': dist,
+                    'kind': 'player'
+                })
+
             # Determine sky colour for this player based on their biome
             pcx, pcy = player_state[sid]['cell']
             cx_i, cy_i = int(pcx), int(pcy)

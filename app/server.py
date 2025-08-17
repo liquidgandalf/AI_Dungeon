@@ -1,5 +1,6 @@
 # SkeletonGame/app/server.py
 import os
+import shutil
 import time
 import json
 import base64
@@ -177,7 +178,7 @@ def controller():
         'skin': '#3399ff'
     }
     safe_ip = (client_ip or 'unknown').replace(':', '_')
-    sprite_url_guess = f"/static/img/recolored/{safe_ip}.png"
+    sprite_url_guess = f"/static/img/items/{safe_ip}.png"
     return render_template(
         'controller.html',
         default_name=default_name,
@@ -286,17 +287,37 @@ def on_join(data):
         if isinstance(sprite_data_url, str) and sprite_data_url.startswith('data:image/png;base64,'):
             b64 = sprite_data_url.split(',', 1)[1]
             raw = base64.b64decode(b64)
-            rec_dir = os.path.join(static_dir, 'img', 'recolored')
+            rec_dir = os.path.join(static_dir, 'img', 'items')
             os.makedirs(rec_dir, exist_ok=True)
             safe_ip = (client_ip or 'unknown').replace(':', '_')
             out_path = os.path.join(rec_dir, f"{safe_ip}.png")
             with open(out_path, 'wb') as f:
                 f.write(raw)
             # Public URL path
-            players[sid]['sprite_path'] = f"/static/img/recolored/{safe_ip}.png"
+            players[sid]['sprite_path'] = f"/static/img/items/{safe_ip}.png"
         elif isinstance(persisted.get('sprite_path'), str):
             # Reuse previously saved sprite if any
             players[sid]['sprite_path'] = persisted['sprite_path']
+        # Migration: ensure items/<ip>.png exists for phones; if not, copy from legacy locations
+        try:
+            safe_ip = (client_ip or 'unknown').replace(':', '_')
+            items_dir = os.path.join(static_dir, 'img', 'items')
+            os.makedirs(items_dir, exist_ok=True)
+            items_path = os.path.join(items_dir, f"{safe_ip}.png")
+            if not os.path.exists(items_path):
+                # Check legacy recolored/<ip>.png
+                legacy1 = os.path.join(static_dir, 'img', 'recolored', f"{safe_ip}.png")
+                legacy2 = os.path.join(static_dir, 'img', 'players', f"{safe_ip}.png")
+                src = None
+                if os.path.exists(legacy1):
+                    src = legacy1
+                elif os.path.exists(legacy2):
+                    src = legacy2
+                if src:
+                    shutil.copyfile(src, items_path)
+                    players[sid]['sprite_path'] = f"/static/img/items/{safe_ip}.png"
+        except Exception:
+            pass
     except Exception:
         # Ignore saving errors silently for now
         pass

@@ -1,6 +1,7 @@
 {
   "characters": [
     { "id": "girl_elf", "name": "Girl Elf", "img": "players/girl_elf.png" },
-    { "id": "boy_elf",  "name": "Boy Elf",  "img": "players/boy_elf.png" }
+    { "id": "boy_elf",  "name": "Boy Elf",  "img": "players/boy_elf.png" },
+    { "id": "unicorn_man",  "name": "Unicorn Man",  "img": "players/unicorn_man.png" }
   ]
 }
