@@ -201,21 +201,22 @@
   const leftDurBar = ensureDurBar(leftActionBtn);
   const rightDurBar = ensureDurBar(rightActionBtn);
 
-  function setDurBar(side, fraction){
+  function setDurBar(side, fraction, hasItem){
     const bar = side === 'left' ? leftDurBar : rightDurBar;
     const img = side === 'left' ? leftHandImg : rightHandImg;
     if (!bar) return;
     const segs = bar.querySelectorAll('.durSeg');
     if (!segs || !segs.length) return;
+    const has = !!hasItem;
     let f = typeof fraction === 'number' && isFinite(fraction) ? Math.max(0, Math.min(1, fraction)) : 1;
     const filledCount = Math.round(f * 10);
     segs.forEach((seg, idx) => {
       if (idx < filledCount) seg.classList.add('filled'); else seg.classList.remove('filled');
     });
-    // hide if nothing equipped
-    bar.style.display = (fraction == null && typeof fraction !== 'number') ? 'none' : '';
+    // hide only if no item equipped for that hand
+    bar.style.display = has ? '' : 'none';
     // if durability is zero, hide the icon overlay to reflect broken item visually
-    if (img) img.style.display = f === 0 ? 'none' : '';
+    if (img) img.style.display = has && f === 0 ? 'none' : '';
   }
 
   function extractDurInfo(item){
@@ -950,11 +951,11 @@
       const R = extractDurInfo(eq.right_hand);
       hudEquip.left = L.id;
       hudEquip.right = R.id;
-      setDurBar('left', L.frac);
-      setDurBar('right', R.frac);
+      setDurBar('left', L.frac, !!L.id);
+      setDurBar('right', R.frac, !!R.id);
     } catch(_){
-      setDurBar('left', null);
-      setDurBar('right', null);
+      setDurBar('left', null, false);
+      setDurBar('right', null, false);
     }
     updateHandIcons();
   });
@@ -967,11 +968,11 @@
       const R = extractDurInfo(eq.right_hand);
       hudEquip.left = L.id;
       hudEquip.right = R.id;
-      setDurBar('left', L.frac);
-      setDurBar('right', R.frac);
+      setDurBar('left', L.frac, !!L.id);
+      setDurBar('right', R.frac, !!R.id);
     } catch(_){
-      setDurBar('left', null);
-      setDurBar('right', null);
+      setDurBar('left', null, false);
+      setDurBar('right', null, false);
     }
     updateHandIcons();
   });
