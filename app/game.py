@@ -1,8 +1,70 @@
+from __future__ import annotations
+
+def _load_scaled_image(path: str, w: int, h: int) -> 'pygame.Surface':
+    key = (path, w, h)
+    surf = _ENEMY_SPRITE_CACHE.get(key)
+    if surf is not None:
+        return surf
+    try:
+        img = pygame.image.load(path).convert_alpha()
+        surf = pygame.transform.smoothscale(img, (w, h))
+        _ENEMY_SPRITE_CACHE[key] = surf
+        return surf
+    except Exception:
+        return None
+
+
+def _resolve_enemy_image_file(img_name: str) -> str:
+    # enemy_types.json 'image' is a filename; assets live in static/img/items/
+    return os.path.join('static', 'img', 'items', img_name)
+
+
+def _get_enemy_sprite(etype: str, info: Dict[str, Any]) -> Tuple['pygame.Surface', int, int]:
+    """Return (sprite_surface, w, h) or (None, 0, 0) if not available.
+    Bosses are rendered larger (~128x256). Slimes at 64x64.
+    """
+    img_name = info.get('image')
+    if not img_name:
+        return (None, 0, 0)
+    is_boss = bool(info.get('boss'))
+    tier = (info.get('tier') or '').lower()
+    # Size policy
+    if is_boss:
+        w, h = 128, 256
+        if tier == 'super':
+            w, h = 144, 288  # slightly bigger
+    else:
+        w, h = 64, 64
+    path = _resolve_enemy_image_file(img_name)
+    surf = _load_scaled_image(path, w, h)
+    if surf is None:
+        return (None, 0, 0)
+    return (surf, w, h)
+
+
+def _get_item_icon(icon_name: str, w: int = 16, h: int = 16) -> 'pygame.Surface':
+    key = (icon_name, w, h)
+    surf = _ITEM_ICON_CACHE.get(key)
+    if surf is not None:
+        return surf
+    try:
+        # Icons stored under static/img/items, icon_name may already include subdir
+        path = icon_name
+        if not (os.path.sep in icon_name or '/' in icon_name):
+            path = os.path.join('static', 'img', 'items', icon_name)
+        img = pygame.image.load(path).convert_alpha()
+        surf = pygame.transform.smoothscale(img, (w, h))
+        _ITEM_ICON_CACHE[key] = surf
+        return surf
+    except Exception:
+        return None
+
 # SkeletonGame/app/game.py
 import random
 import copy
 import time
 import math
+import os
 import pygame
 from typing import Dict, Tuple, List, Any
 from app.server import players, socketio
@@ -72,6 +134,9 @@ def enemy_occupied_cells() -> Dict[Tuple[int,int], str]:
 # Cache of enemy type definitions by type id for rendering pings
 _ENEMY_TYPE_MAP: Dict[str, Dict[str, Any]] = {}
 _WALL_TYPE_MAP: Dict[str, Dict[str, Any]] = {}
+# Sprite caches
+_ENEMY_SPRITE_CACHE: Dict[Tuple[str, int, int], pygame.Surface] = {}
+_ITEM_ICON_CACHE: Dict[Tuple[str, int, int], pygame.Surface] = {}
 
 def clamp(v: int, lo: int, hi: int) -> int:
     return max(lo, min(hi, int(v)))
@@ -105,6 +170,14 @@ def make_enemy_instance(etype: str, cx: int, cy: int, spawner_id: str = None) ->
         b = 0
     # Build instance
     eid = f"e{len(enemies) + 1}"
+    # Determine sprite sizing for clients
+    is_boss = bool(tdef.get('boss'))
+    tier = (tdef.get('tier') or '').lower()
+    if is_boss:
+        spr_w, spr_h = (144, 288) if tier == 'super' else (128, 256)
+    else:
+        spr_w, spr_h = (64, 64)
+
     inst: Dict[str, Any] = {
         'id': eid,
         'type': etype,
@@ -120,6 +193,9 @@ def make_enemy_instance(etype: str, cx: int, cy: int, spawner_id: str = None) ->
         'speed': int(stats_current.get('speed', 0)),
         'next_move_ts': 0.0,
         'dir': [0, 0],  # last chosen move direction (dx, dy)
+        # Client sprite hints
+        'sprite_w': spr_w,
+        'sprite_h': spr_h,
     }
     # Initialize timer with slight jitter so not all enemies move together
     interval = None
@@ -166,22 +242,30 @@ def render_enemy_pings(screen: pygame.surface.Surface, visible: List[List[bool]]
         return
     types = get_enemy_type_map()
     t = time.time()
-    # pulse radius in pixels
-    r = 4 + int((math.sin(t * 2.0) + 1.0) * 0.5 * 12)  # 4..16
-    size = r * 2 + 4
-    # Pre-make surface per distinct colour to reduce overdraw setup
-    surf_cache: Dict[Tuple[int,int,int,int], pygame.Surface] = {}
+    # Pre-make surface per distinct colour and size to reduce overdraw setup
+    surf_cache: Dict[Tuple[int,int,int,int,int], pygame.Surface] = {}
 
     for e in enemies.values():
         etype = str(e.get('type', ''))
         info = types.get(etype) or {}
         col = info.get('pingcolour', [255, 0, 255])  # magenta default
+        # Boss scale: sub boss x1.6, super boss x2.2
+        is_boss = bool(info.get('boss'))
+        tier = (info.get('tier') or '').lower()
+        scale = 1.0
+        if is_boss:
+            scale = 2.2 if tier == 'super' else 1.6
+        # pulse radius in pixels (base 4..16)
+        base_r = 4 + int((math.sin(t * 2.0) + 1.0) * 0.5 * 12)
+        r = max(4, int(base_r * scale))
+        size = r * 2 + 4
         color_a = (int(col[0]), int(col[1]), int(col[2]), 140)
-        surf = surf_cache.get(color_a)
+        cache_key = (color_a[0], color_a[1], color_a[2], color_a[3], r)
+        surf = surf_cache.get(cache_key)
         if surf is None:
             surf = pygame.Surface((size, size), pygame.SRCALPHA)
             pygame.draw.circle(surf, color_a, (r+2, r+2), r, width=2)
-            surf_cache[color_a] = surf
+            surf_cache[cache_key] = surf
         pos = e.get('pos')
         if not pos:
             continue
@@ -311,35 +395,10 @@ def init_random_enemies_once():
 
 
 def render_enemies(screen: pygame.surface.Surface, visible: List[List[bool]] = None):
-    """Render enemies as simple colored circles using their pingcolour.
-    This is a placeholder until sprite-based rendering is added.
+    """Do not render enemy bodies on the server map; pings are rendered separately by
+    render_enemy_pings(). This keeps the server display minimal while clients render sprites.
     """
-    if not enemies:
-        return
-    types = get_enemy_type_map()
-    for e in enemies.values():
-        pos = e.get('pos')
-        if not pos:
-            continue
-        cx, cy = int(pos[0]), int(pos[1])
-        if visible is not None:
-            if not (0 <= cy < len(visible) and 0 <= cx < len(visible[0]) and visible[cy][cx]):
-                continue
-        px, py = cell_to_px(cx, cy)
-        info = types.get(str(e.get('type', ''))) or {}
-        col = e.get('pingcolour', info.get('pingcolour', [80, 200, 120]))
-        color = (int(col[0]), int(col[1]), int(col[2]))
-        # Draw filled circle with a darker outline
-        center = (px + TILE_SIZE//2, py + TILE_SIZE//2)
-        radius = max(6, TILE_SIZE//3)
-        pygame.draw.circle(screen, color, center, radius)
-        outline = tuple(max(0, c - 60) for c in color)
-        pygame.draw.circle(screen, outline, center, radius, width=2)
-        # If enemy carries an item, draw a small marker (placeholder for icon)
-        if e.get('carried_item'):
-            mx, my = center[0] + radius + 2, center[1] - radius
-            pygame.draw.rect(screen, (240, 255, 240), (mx, my, 6, 6))
-            pygame.draw.rect(screen, (60, 100, 60), (mx, my, 6, 6), width=1)
+    return
 
 # Biomes grid parallel to 'grid' holding biome id per tile: 0..6
 biomes: List[List[int]] = []
