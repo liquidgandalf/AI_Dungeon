@@ -83,6 +83,7 @@
     "allowed_slots": ["left_hand", "right_hand"],
     "active": 0,
     "spawn_type": null,
+    "icon": "items/pickaxe.png",
     "stats": {
       "weight": 3.5,
       "attack": 2,

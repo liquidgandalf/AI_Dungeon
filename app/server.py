@@ -6,7 +6,7 @@ import json
 import base64
 from flask import Flask, render_template, request
 from flask_socketio import SocketIO, emit
-from .items import get_item
+from .items import get_item, get_item_icons_map
 from .config import get_game_config
 
 # Resolve directories relative to this file
@@ -187,6 +187,7 @@ def controller():
         default_colors=default_colors,
         client_ip=safe_ip,
         sprite_url_guess=sprite_url_guess,
+        item_icons=get_item_icons_map(),
     )
 
 @socketio.on('connect')

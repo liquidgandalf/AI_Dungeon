@@ -40,6 +40,8 @@ class ItemType(TypedDict, total=False):
     active: bool
     # Optional enemy type id this item can spawn (used by spawners)
     spawn_type: str
+    # Optional icon path relative to /static/img/ (e.g., 'items/pickaxe.png')
+    icon: str
 
 # Database of item types (extensible)
 ITEM_DB: Dict[str, ItemType] = {}
@@ -86,6 +88,7 @@ def _load_items_from_config():
             stats = it.get('stats', {})
             active = bool(it.get('active', True))
             spawn_type = it.get('spawn_type')
+            icon = it.get('icon')
             if not item_id or not name:
                 continue
             register_item({
@@ -95,6 +98,7 @@ def _load_items_from_config():
                 'stats': stats,
                 'active': active,
                 **({'spawn_type': str(spawn_type)} if isinstance(spawn_type, str) and spawn_type else {}),
+                **({'icon': str(icon)} if isinstance(icon, str) and icon else {}),
             })
         except Exception:
             # Skip malformed entries
@@ -103,3 +107,22 @@ def _load_items_from_config():
 
 # Populate ITEM_DB on import
 _load_items_from_config()
+
+
+def get_item_icon(item_id: str) -> Optional[str]:
+    """Return the configured icon path for an item (relative to /static/img/), if any."""
+    it = get_item(item_id)
+    if not it:
+        return None
+    icon = it.get('icon')  # type: ignore[assignment]
+    return icon if isinstance(icon, str) and icon else None
+
+
+def get_item_icons_map() -> Dict[str, str]:
+    """Return a mapping of item_id -> icon path for items that define an icon."""
+    out: Dict[str, str] = {}
+    for iid, it in ITEM_DB.items():
+        icon = it.get('icon')
+        if isinstance(icon, str) and icon:
+            out[iid] = icon
+    return out

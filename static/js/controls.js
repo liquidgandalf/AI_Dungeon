@@ -22,6 +22,18 @@
       const parsed = JSON.parse(charDataEl.textContent);
       if (Array.isArray(parsed)) characters = parsed;
     }
+
+  // Initialize ITEM_ICONS from embedded JSON if not set
+  (function initItemIcons(){
+    try {
+      if (!window.ITEM_ICONS) {
+        const tag = document.getElementById('item-icons');
+        if (tag && tag.textContent) {
+          window.ITEM_ICONS = JSON.parse(tag.textContent);
+        }
+      }
+    } catch(_){}
+  })();
   } catch(_) {}
   const leaveTopBtn = document.getElementById('leaveTop');
   const view3d = document.getElementById('view3d');
@@ -434,11 +446,13 @@
   // Map item id to HUD icon path
   function itemIconPath(itemId){
     if (!itemId) return null;
-    switch(itemId){
-      case 'pickaxe_basic': return 'items/pickaxe.png';
-      // add more items here as needed
-      default: return null;
-    }
+    try {
+      if (window.ITEM_ICONS && typeof window.ITEM_ICONS === 'object'){
+        const p = window.ITEM_ICONS[itemId];
+        if (typeof p === 'string' && p) return p;
+      }
+    } catch(_){}
+    return null;
   }
 
   // Small checker pattern generator (cached by cell size)
