@@ -30,16 +30,16 @@
       <div id="cooldownWrap" style="height:10px; background:#333; border-radius:6px; overflow:hidden; margin:8px 0 12px 0;">
         <div id="cooldownBar" style="height:100%; width:0%; background:#4caf50;"></div>
       </div>
-      <div class="row">
-        <button class="btn" data-cmd="up">⬆️</button>
+      <!-- Movement/Turning Controls -->
+      <div class="row" style="gap:12px; justify-content:center; align-items:center;">
+        <button class="btn" data-cmd="turn_left" aria-label="Turn Left">↺</button>
+        <button class="btn" data-cmd="up" aria-label="Forward">⬆️</button>
+        <button class="btn" data-cmd="turn_right" aria-label="Turn Right">↻</button>
       </div>
-      <div class="row">
-        <button class="btn" data-cmd="left">⬅️</button>
-        <div class="spacer"></div>
-        <button class="btn" data-cmd="right">➡️</button>
-      </div>
-      <div class="row">
-        <button class="btn" data-cmd="down">⬇️</button>
+      <div class="row" style="gap:12px; justify-content:center; align-items:center;">
+        <button class="btn" data-cmd="strafe_left" aria-label="Side Step Left">⬅️</button>
+        <button class="btn" data-cmd="down" aria-label="Backward">⬇️</button>
+        <button class="btn" data-cmd="strafe_right" aria-label="Side Step Right">➡️</button>
       </div>
       <div class="row">
         <button id="leave" class="leave">Leave</button>

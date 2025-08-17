@@ -142,9 +142,15 @@
     startCooldownLoop();
   }
 
+  function normalizeCmd(cmd){
+    if (cmd === 'turn_left') return 'left';
+    if (cmd === 'turn_right') return 'right';
+    return cmd;
+  }
+
   function trySendControl(cmd){
     // Movement is smooth: send immediately, no cooldown gating
-    socket.emit('control', { command: cmd });
+    socket.emit('control', { command: normalizeCmd(cmd) });
   }
 
   joinBtn.addEventListener('click', () => {
