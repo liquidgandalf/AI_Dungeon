@@ -162,6 +162,8 @@ def on_disconnect():
             'backpack_weight_used': p.get('backpack_weight_used', 0.0),
             'cell': p.get('cell'),  # populated by game loop each frame
             'angle': p.get('angle'),
+            # Persist per-player fog-of-war mask if present
+            'seen': p.get('seen'),
         }
         remembered_names[client_ip] = p.get('name', remembered_names.get(client_ip, ''))
         print(f"Client disconnected: {players[sid]['name']} ({sid})")
@@ -215,6 +217,7 @@ def on_join(data):
         'restore': {
           'cell': persisted.get('cell'),
           'angle': persisted.get('angle'),
+          'seen': persisted.get('seen'),
         }
     }
     # Restore equipment if available

@@ -830,26 +830,59 @@ def tick_enemies():
 def ensure_player(sid: str):
     if sid not in player_state:
         init_grid_once()
-        cx, cy = random_empty_cell()
+        # Try to restore from persisted profile if available
+        restore_cell = None
+        restore_angle = None
+        restore_seen = None
+        try:
+            p = players.get(sid) or {}
+            r = p.get('restore') or {}
+            rc = r.get('cell')
+            ra = r.get('angle')
+            rs = r.get('seen')
+            if (isinstance(rc, (list, tuple)) and len(rc) == 2
+                and isinstance(rc[0], (int, float)) and isinstance(rc[1], (int, float))):
+                tx, ty = int(rc[0]), int(rc[1])
+                # Validate passability of the restored cell
+                if 0 <= tx < GRID_W and 0 <= ty < GRID_H:
+                    if grid[ty][tx] == EMPTY and (tx, ty) not in occupied and (tx, ty) not in solid_cells:
+                        restore_cell = (tx, ty)
+            if isinstance(ra, (int, float)):
+                restore_angle = float(ra)
+            # Validate seen mask dimensions if provided
+            if isinstance(rs, list) and len(rs) == GRID_H and all(isinstance(row, list) and len(row) == GRID_W for row in rs):
+                restore_seen = rs
+        except Exception:
+            restore_cell = None
+            restore_angle = None
+            restore_seen = None
+
+        if restore_cell is None:
+            cx, cy = random_empty_cell()
+        else:
+            cx, cy = restore_cell
         occupied[(cx, cy)] = sid
         px, py = cell_to_px(cx, cy)
+        # Default facing is down (90 deg) unless a restore angle exists
+        ang = restore_angle if restore_angle is not None else math.radians(90)
         player_state[sid] = {
             'cell': (cx, cy),
             'pos': (px, py),
-            'dir': 'down',  # default facing
-            'angle': math.radians(90),  # down
-            'target_angle': math.radians(90),
+            'dir': 'down',  # textual dir not strictly used for movement
+            'angle': ang,
+            'target_angle': ang,
             'last_frame_ts': 0.0,
             'spawned_chest': False,
         }
-        # Initialize per-player seen mask for fog-of-war
+        # Initialize per-player seen mask for fog-of-war (or restore persisted)
         try:
             vis_cfg = (game_config.get_game_config() or {}).get('visibility') or {}
             mode = str(vis_cfg.get('mode', 'full'))
             reveal_r = int(vis_cfg.get('reveal_radius', 6))
         except Exception:
             mode, reveal_r = 'full', 6
-        seen = [[False for _ in range(GRID_W)] for _ in range(GRID_H)]
+        # Prefer restored seen if available and valid
+        seen = restore_seen if restore_seen is not None else [[False for _ in range(GRID_W)] for _ in range(GRID_H)]
         player_state[sid]['seen'] = seen
         if mode in ('fog', 'reveal'):
             # reveal around spawn
@@ -860,9 +893,11 @@ def ensure_player(sid: str):
                     dx = xx - cx
                     if dx*dx + dy*dy <= r2:
                         seen[yy][xx] = True
-        # Also drop a chest adjacent to the player's spawn (once per player)
+        # Also drop a chest adjacent to the player's spawn for NEW spawns only
+        # Do not respawn a chest if we are restoring a returning player
         init_entities_once()
-        place_chest_next_to(cx, cy)
+        if restore_cell is None:
+            place_chest_next_to(cx, cy)
 
 
 def apply_command(pos: Tuple[int, int], cmd: str) -> Tuple[int, int]:
@@ -1159,6 +1194,18 @@ def run_game(screen: pygame.surface.Surface, qr_surface: pygame.surface.Surface)
                     return 'left'
                 return 'up'
             player_state[sid]['dir'] = angle_to_dir(player_state[sid]['angle'])
+
+            # Mirror live state back to server players dict for persistence
+            try:
+                st = player_state.get(sid) or {}
+                p = players.get(sid)
+                if p is not None:
+                    p['cell'] = tuple(st.get('cell') or (0, 0))
+                    p['angle'] = float(st.get('angle', ang))
+                    if 'seen' in st and st['seen']:
+                        p['seen'] = st['seen']
+            except Exception:
+                pass
 
             # Process pending hand action (e.g., pickaxe breaking a wall)
             act = players.get(sid, {}).pop('pending_action', None)

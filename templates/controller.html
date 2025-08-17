@@ -11,7 +11,10 @@
 </head>
 <body>
   <div class="container">
-    <h1>Join</h1>
+    <div class="row" style="justify-content:space-between; align-items:center;">
+      <h1 id="title" style="margin:0;">Join</h1>
+      <button id="leaveTop" class="leave" style="display:none;">Leave</button>
+    </div>
     <div id="join">
       <input id="name" type="text" placeholder="Your name" maxlength="12" value="{{ default_name }}">
       <button id="joinBtn">Join</button>
@@ -41,9 +44,7 @@
         <button class="btn" data-cmd="down" aria-label="Backward">⬇️</button>
         <button class="btn" data-cmd="strafe_right" aria-label="Side Step Right">➡️</button>
       </div>
-      <div class="row">
-        <button id="leave" class="leave">Leave</button>
-      </div>
+      <!-- Bottom leave removed to free space for future stats bars -->
     </div>
   </div>
 

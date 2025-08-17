@@ -4,9 +4,10 @@
 
   const joinDiv = document.getElementById('join');
   const padDiv = document.getElementById('pad');
+  const titleEl = document.getElementById('title');
   const nameInput = document.getElementById('name');
   const joinBtn = document.getElementById('joinBtn');
-  const leaveBtn = document.getElementById('leave');
+  const leaveTopBtn = document.getElementById('leaveTop');
   const view3d = document.getElementById('view3d');
   const ctx = view3d ? view3d.getContext('2d') : null;
   const leftActionBtn = document.getElementById('leftAction');
@@ -164,8 +165,8 @@
     btn.addEventListener('click', () => trySendControl(cmd));
   });
 
-  if (leaveBtn) {
-    leaveBtn.addEventListener('click', () => {
+  if (leaveTopBtn) {
+    leaveTopBtn.addEventListener('click', () => {
       // no dedicated leave event; refresh to reset session
       location.reload();
     });
@@ -245,6 +246,9 @@
 
   socket.on('joined', () => {
     showPad(true);
+    // Update header: switch from "Join" to a top Leave button
+    if (titleEl) titleEl.textContent = 'Controller';
+    if (leaveTopBtn) leaveTopBtn.style.display = 'inline-block';
   });
 
   // Simple image cache for spritesheets and item images
