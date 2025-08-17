@@ -893,7 +893,7 @@ def run_game(screen: pygame.surface.Surface, qr_surface: pygame.surface.Surface)
     RC_W = RC_NUM_RAYS
     RC_H = 160
     RC_MAX_DIST = math.hypot(GRID_W, GRID_H)
-    ROT_STEP = math.radians(90)  # target step per left/right command
+    ROT_STEP = math.radians(45)  # target step per left/right command
     ROT_SPEED = math.radians(360)  # deg/sec for smooth rotation
 
     # Ensure world is initialized before loop
@@ -1093,33 +1093,40 @@ def run_game(screen: pygame.surface.Surface, qr_surface: pygame.surface.Surface)
                         targ -= 2*math.pi
                     player_state[sid]['target_angle'] = targ
                 else:
-                    # forward/back relative to angle
-                    forward = 1 if cmd == 'up' else -1
-                    vx = math.cos(ang) * forward
-                    vy = math.sin(ang) * forward
-                    # choose dominant axis move to nearest cell
-                    if abs(vx) >= abs(vy):
+                    # Translation commands: instant tile step based on facing angle
+                    dx = dy = 0
+                    if cmd in ('up', 'down'):
+                        # forward/back relative to angle; allow 8-directional steps
+                        forward = 1 if cmd == 'up' else -1
+                        vx = math.cos(ang) * forward
+                        vy = math.sin(ang) * forward
                         dx = 1 if vx > 0.5 else (-1 if vx < -0.5 else 0)
-                        dy = 0
-                        if dx == 0:
-                            dy = 1 if vy > 0 else -1
-                    else:
                         dy = 1 if vy > 0.5 else (-1 if vy < -0.5 else 0)
-                        dx = 0
-                        if dy == 0:
-                            dx = 1 if vx > 0 else -1
+                    elif cmd in ('strafe_left', 'strafe_right'):
+                        # sidestep perpendicular to facing; allow 8-directional steps
+                        s = math.sin(ang)
+                        c = math.cos(ang)
+                        # Screen coords: +x right, +y down. Player-left uses ( +sin, -cos ).
+                        if cmd == 'strafe_left':
+                            vx, vy = (s), (-c)
+                        else:  # 'strafe_right'
+                            vx, vy = (-s), (c)
+                        dx = 1 if vx > 0.5 else (-1 if vx < -0.5 else 0)
+                        dy = 1 if vy > 0.5 else (-1 if vy < -0.5 else 0)
+                    # No strafe on left/right; those are turns
                     nx, ny = cx + dx, cy + dy
                     # Bounds and collisions
-                    if 0 <= nx < GRID_W and 0 <= ny < GRID_H:
-                        if (grid[ny][nx] != WALL
-                            and (nx, ny) not in occupied
-                            and (nx, ny) not in solid_cells
-                            and (nx, ny) not in e_occ_for_players):
-                            occupied.pop((cx, cy), None)
-                            occupied[(nx, ny)] = sid
-                            player_state[sid]['cell'] = (nx, ny)
-                            player_state[sid]['pos'] = cell_to_px(nx, ny)
-                            moved = True
+                    if dx != 0 or dy != 0:
+                        if 0 <= nx < GRID_W and 0 <= ny < GRID_H:
+                            if (grid[ny][nx] != WALL
+                                and (nx, ny) not in occupied
+                                and (nx, ny) not in solid_cells
+                                and (nx, ny) not in e_occ_for_players):
+                                occupied.pop((cx, cy), None)
+                                occupied[(nx, ny)] = sid
+                                player_state[sid]['cell'] = (nx, ny)
+                                player_state[sid]['pos'] = cell_to_px(nx, ny)
+                                moved = True
                 pdata['pending'] = None  # consume the command
 
             # Smoothly rotate towards target angle every frame

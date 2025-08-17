@@ -80,6 +80,12 @@ def _emit_cooldown(sid: str):
 def _process_control(sid: str, cmd: str):
     if sid not in players:
         return
+    # Normalize turn aliases for compatibility
+    if cmd == 'turn_left':
+        cmd = 'left'
+    elif cmd == 'turn_right':
+        cmd = 'right'
+    # Record pending command to be consumed by the pygame loop
     players[sid]['pending'] = cmd
     # Movement commands no longer use cooldown; process immediately in game loop
 
@@ -233,6 +239,10 @@ def on_control(data):
     sid = request.sid
     if sid not in players:
         return
+    try:
+        print(f"control: {cmd} from {sid}")
+    except Exception:
+        pass
     # Movement is smooth: process immediately, no cooldown gating
     _process_control(sid, cmd)
 
