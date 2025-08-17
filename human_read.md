@@ -344,3 +344,8 @@ The client looks up images at `/static/img/<path>`. For example, `items/chest.pn
 - Config loader: `AI_Dungeon/app/config.py` — reads all JSON configs.
 - Server/players: `AI_Dungeon/app/server.py` — cooldowns, state, and sockets.
 
+
+## Known issues
+
+- Durability bars/hands UI can still be visible briefly when opening the inventory. Intended behavior is to hide these while the inventory overlay is open. A fix is in progress to consistently toggle their visibility.
+

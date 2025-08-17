@@ -77,7 +77,11 @@ def get_game_config() -> Dict[str, Any]:
     vis.setdefault('enemies', True)       # show enemy markers on big map
     vis.setdefault('enemy_pings', True)   # show radar pings on big map
     vis.setdefault('enemy_pings_ignore_visibility', True)  # show pings even on unseen tiles
+    # Show chest markers through fog on big map
+    vis.setdefault('show_chests', True)
     _game_config['visibility'] = vis
+    # Chest loot tables (optional)
+    _game_config.setdefault('chests', {})
     return _game_config
 
 

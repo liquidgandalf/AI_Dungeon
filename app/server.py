@@ -467,11 +467,65 @@ def on_action(data):
                 }
             else:
                 eq[slot] = None
-        emit('state', {
+        # Optionally include nearby chest contents if player is adjacent to a chest
+        chest_payload = None
+        try:
+            # Late import to avoid circular import at module load
+            from app import game as _game
+            cell = p.get('cell')
+            if isinstance(cell, (list, tuple)) and len(cell) == 2:
+                px, py = int(cell[0]), int(cell[1])
+                nearest = None
+                ndist = 99
+                for ent in getattr(_game, 'world_entities', []) or []:
+                    try:
+                        if (ent.get('type') or 'item') != 'item':
+                            continue
+                        item_id = str(ent.get('item_id') or '')
+                        if not item_id.startswith('chest_'):
+                            continue
+                        pos = ent.get('pos') or ent.get('position')
+                        if not pos or len(pos) < 2:
+                            continue
+                        ex, ey = int(float(pos[0])), int(float(pos[1]))
+                        # Manhattan adjacency (same tile or 4-neighborhood)
+                        d = abs(ex - px) + abs(ey - py)
+                        if d <= 1 and d < ndist:
+                            nearest = ent
+                            ndist = d
+                    except Exception:
+                        continue
+                if nearest and isinstance(nearest.get('contents'), list):
+                    items = []
+                    for e in (nearest.get('contents') or []):
+                        try:
+                            tid = str(e.get('item') or '')
+                            qty = int(e.get('qty') or 0)
+                            if not tid or qty <= 0:
+                                continue
+                            it = get_item(tid) or {}
+                            items.append({
+                                'id': tid,
+                                'name': it.get('name', tid),
+                                'qty': qty,
+                            })
+                        except Exception:
+                            continue
+                    chest_payload = {
+                        'item_id': str(nearest.get('item_id') or ''),
+                        'position': list(nearest.get('pos') or []),
+                        'items': items,
+                    }
+        except Exception:
+            pass
+        payload = {
             'stats': p.get('stats', {}),
             'equipment': eq,
             'inventory': inv,
-        })
+        }
+        if chest_payload:
+            payload['chest'] = chest_payload
+        emit('state', payload)
     elif btn in ('left', 'right'):
         # record a pending hand action to be processed by the game loop
         players[sid]['pending_action'] = btn  # 'left' or 'right'

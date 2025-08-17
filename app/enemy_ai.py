@@ -95,6 +95,19 @@ AI_DISPATCH = {
     'slime_green': slime_ai,
     'slime_blue': slime_ai,
     'slime_red': slime_ai,
+    # Water bosses
+    'boss_water_thalryss': None,  # placeholder for boss_ai below
+    'boss_water_kravenor': None,
+    'super_water_leviathra': None,
+    # Earth bosses
+    'boss_earth_gravemaw': None,
+    'boss_earth_veythra': None,
+    'super_earth_sylthrak': None,
+    # Fire bosses
+    'boss_fire_pyrrhion': None,
+    'boss_fire_ignivrax': None,
+    'super_fire_cindralok': None,
+    'super_fire_ignivrax': None,
 }
 
 
@@ -109,3 +122,46 @@ def compute_enemy_intents(world: WorldView, enemies: Dict[str, EnemyInst]) -> Li
             intent = {'kind': 'idle', 'id': enemy['id']}
         intents.append(intent)
     return intents
+
+
+# --- Boss AI (placeholder) ---
+def boss_ai(enemy: EnemyInst, world: WorldView) -> Intent:
+    """Basic boss behavior for now:
+    - Prefer nearest player within 12 tiles; else slow wander.
+    - Attack in melee when adjacent.
+    Later we can extend to use item-based affinities (fear/desire/vulnerable).
+    """
+    pos = enemy.get('pos', (0, 0))
+    state = enemy.setdefault('state', {})
+    roam_cd = state.get('roam_cd', 0.0)
+
+    target_info = _nearest_player(pos, world['players'])
+    if target_info is not None:
+        sid, (tx, ty), dist = target_info
+        if dist <= 1.0:
+            return {'kind': 'attack', 'id': enemy['id'], 'target_id': sid}
+        if dist <= 12.0:
+            dx = 1 if tx > pos[0] else (-1 if tx < pos[0] else 0)
+            dy = 1 if ty > pos[1] else (-1 if ty < pos[1] else 0)
+            if abs(tx - pos[0]) >= abs(ty - pos[1]):
+                return {'kind': 'move', 'id': enemy['id'], 'dx': dx, 'dy': 0}
+            else:
+                return {'kind': 'move', 'id': enemy['id'], 'dx': 0, 'dy': dy}
+
+    # Slow wander
+    if roam_cd <= 0:
+        state['roam_cd'] = random.uniform(0.8, 2.2)
+        choice = random.choice([(1,0), (-1,0), (0,1), (0,-1), (0,0)])
+        if choice != (0,0):
+            return {'kind': 'move', 'id': enemy['id'], 'dx': choice[0], 'dy': choice[1]}
+    else:
+        state['roam_cd'] = max(0.0, roam_cd - 0.1)
+    return {'kind': 'idle', 'id': enemy['id']}
+
+
+# Register boss types to boss_ai
+for _t in [
+    'boss_water_thalryss', 'boss_water_kravenor', 'super_water_leviathra',
+    'boss_earth_gravemaw', 'boss_earth_veythra', 'super_earth_sylthrak',
+    'boss_fire_pyrrhion', 'boss_fire_ignivrax', 'super_fire_cindralok', 'super_fire_ignivrax']:
+    AI_DISPATCH[_t] = boss_ai

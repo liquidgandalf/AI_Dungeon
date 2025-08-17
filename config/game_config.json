@@ -12,6 +12,7 @@
     "mode": "reveal",
     "reveal_radius": 6,
     "enemies": true,
-    "enemy_pings": true
+    "enemy_pings": true,
+    "show_chests": true
   }
 }

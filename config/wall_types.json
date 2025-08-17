@@ -5,7 +5,7 @@
     "image": "wall1.png",
     "stats": {
       "durability": 100,
-      "damaged": 10,
+      "damage": 10,
       "strength": 0,
       "attack": 0,
       "defense": 0,

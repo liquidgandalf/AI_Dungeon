@@ -98,5 +98,204 @@
     "active": 1,
     "spawn_type": "slime_green",
     "stats": {}
+  },
+  {
+    "id": "chest_basic",
+    "name": "Wooden Chest",
+    "allowed_slots": [],
+    "active": 1,
+    "spawn_type": null,
+    "icon": "items/chest.png",
+    "container": true,
+    "numberitems": 3,
+    "maycontain": [
+      { "item": "sword_basic", "weight": 10, "min": 1, "max": 1 },
+      { "item": "pickaxe_basic", "weight": 10, "min": 1, "max": 1 },
+      { "item": "backpack_small", "weight": 8, "min": 1, "max": 1 },
+      { "item": "helmet_leather", "weight": 12, "min": 1, "max": 1 },
+      { "item": "boots_leather", "weight": 12, "min": 1, "max": 1 },
+      { "item": "armor_cloth", "weight": 8, "min": 1, "max": 1 }
+    ],
+    "stats": {}
+  },
+  {
+    "id": "obsidian_ritual_dagger",
+    "name": "Obsidian Ritual Dagger",
+    "allowed_slots": ["left_hand", "right_hand"],
+    "active": 0,
+    "spawn_type": null,
+    "icon": "items/Obsidian Ritual Dagger.png",
+    "special": true,
+    "stats": { "weight": 6.0, "durability": 100 }
+  },
+  {
+    "id": "infernal_grimoire",
+    "name": "Infernal Grimoire",
+    "allowed_slots": ["left_hand", "right_hand"],
+    "active": 0,
+    "spawn_type": null,
+    "icon": "items/Infernal Grimoire.png",
+    "special": true,
+    "stats": { "weight": 7.5, "durability": 100 }
+  },
+  {
+    "id": "cursed_skull_idol",
+    "name": "Cursed Skull Idol",
+    "allowed_slots": ["left_hand", "right_hand"],
+    "active": 0,
+    "spawn_type": null,
+    "icon": "items/Cursed Skull Idol.png",
+    "special": true,
+    "stats": { "weight": 6.5, "durability": 100 }
+  },
+  {
+    "id": "ashen_pentacle",
+    "name": "Ashen Pentacle",
+    "allowed_slots": ["left_hand", "right_hand"],
+    "active": 0,
+    "spawn_type": null,
+    "icon": "items/Ashen Pentacle.png",
+    "special": true,
+    "stats": { "weight": 5.5, "durability": 100 }
+  },
+  {
+    "id": "horn_of_the_abyss",
+    "name": "Horn of the Abyss",
+    "allowed_slots": ["left_hand", "right_hand"],
+    "active": 0,
+    "spawn_type": null,
+    "icon": "items/Horn of the Abyss.png",
+    "special": true,
+    "stats": { "weight": 6.0, "durability": 100 }
+  },
+  {
+    "id": "hellfire_candle",
+    "name": "Hellfire Candle",
+    "allowed_slots": ["left_hand", "right_hand"],
+    "active": 0,
+    "spawn_type": null,
+    "icon": "items/Hellfire Candle.png",
+    "special": true,
+    "stats": { "weight": 5.0, "durability": 100 }
+  },
+  {
+    "id": "bloodstone_amulet",
+    "name": "Bloodstone Amulet",
+    "allowed_slots": ["left_hand", "right_hand"],
+    "active": 0,
+    "spawn_type": null,
+    "icon": "items/Bloodstone Amulet.png",
+    "special": true,
+    "stats": { "weight": 5.5, "durability": 100 }
+  },
+  {
+    "id": "bone_chalice_of_the_damned",
+    "name": "Bone Chalice of the Damned",
+    "allowed_slots": ["left_hand", "right_hand"],
+    "active": 0,
+    "spawn_type": null,
+    "icon": "items/Bone Chalice of the Damned.png",
+    "special": true,
+    "stats": { "weight": 7.0, "durability": 100 }
+  },
+  {
+    "id": "sword_of_saint_aurelius",
+    "name": "Sword of Saint Aurelius",
+    "allowed_slots": ["left_hand", "right_hand"],
+    "active": 0,
+    "spawn_type": null,
+    "icon": "items/Sword of Saint Aurelius.png",
+    "special": true,
+    "stats": { "weight": 8.5, "durability": 100 }
+  },
+  {
+    "id": "hammer_of_purity",
+    "name": "Hammer of Purity",
+    "allowed_slots": ["left_hand", "right_hand"],
+    "active": 0,
+    "spawn_type": null,
+    "icon": "items/Hammer of Purity.png",
+    "special": true,
+    "stats": { "weight": 9.0, "durability": 100 }
+  },
+  {
+    "id": "runed_war_axe",
+    "name": "Runed War Axe",
+    "allowed_slots": ["left_hand", "right_hand"],
+    "active": 0,
+    "spawn_type": null,
+    "icon": "items/Runed War Axe.png",
+    "special": true,
+    "stats": { "weight": 9.5, "durability": 100 }
+  },
+  {
+    "id": "demonbane_cross",
+    "name": "Demonbane Cross",
+    "allowed_slots": ["left_hand", "right_hand"],
+    "active": 0,
+    "spawn_type": null,
+    "icon": "items/Demonbane Cross.png",
+    "special": true,
+    "stats": { "weight": 6.0, "durability": 100 }
+  },
+  {
+    "id": "blessed_salt_crystals",
+    "name": "Blessed Salt Crystals",
+    "allowed_slots": ["left_hand", "right_hand"],
+    "active": 0,
+    "spawn_type": null,
+    "icon": "items/Blessed Salt Crystals.png",
+    "special": true,
+    "stats": { "weight": 5.0, "durability": 100 }
+  },
+  {
+    "id": "black_lotus_incense",
+    "name": "Black Lotus Incense",
+    "allowed_slots": ["left_hand", "right_hand"],
+    "active": 0,
+    "spawn_type": null,
+    "icon": "items/Black Lotus Incense.png",
+    "special": true,
+    "stats": { "weight": 5.5, "durability": 100 }
+  },
+  {
+    "id": "chains_of_servitude",
+    "name": "Chains of Servitude",
+    "allowed_slots": ["left_hand", "right_hand"],
+    "active": 0,
+    "spawn_type": null,
+    "icon": "items/Chains of Servitude.png",
+    "special": true,
+    "stats": { "weight": 8.0, "durability": 100 }
+  },
+  {
+    "id": "mirror_of_vanity",
+    "name": "Mirror of Vanity",
+    "allowed_slots": ["left_hand", "right_hand"],
+    "active": 0,
+    "spawn_type": null,
+    "icon": "items/Mirror of Vanity.png",
+    "special": true,
+    "stats": { "weight": 6.0, "durability": 100 }
+  },
+  {
+    "id": "crown_of_bones",
+    "name": "Crown of Bones",
+    "allowed_slots": ["left_hand", "right_hand"],
+    "active": 0,
+    "spawn_type": null,
+    "icon": "items/Crown of Bones.png",
+    "special": true,
+    "stats": { "weight": 7.0, "durability": 100 }
+  },
+  {
+    "id": "chalice_of_eternal_wine",
+    "name": "Chalice of Eternal Wine",
+    "allowed_slots": ["left_hand", "right_hand"],
+    "active": 0,
+    "spawn_type": null,
+    "icon": "items/Chalice of Eternal Wine.png",
+    "special": true,
+    "stats": { "weight": 6.5, "durability": 100 }
   }
 ]

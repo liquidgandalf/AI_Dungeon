@@ -1,5 +1,5 @@
 # AI_Dungeon/app/items.py
-from typing import Dict, List, Literal, Optional, TypedDict
+from typing import Dict, List, Literal, Optional, TypedDict, Any
 from .config import get_items
 
 # Slot names
@@ -42,6 +42,12 @@ class ItemType(TypedDict, total=False):
     spawn_type: str
     # Optional icon path relative to /static/img/ (e.g., 'items/pickaxe.png')
     icon: str
+    # Special/unique world item flag
+    special: bool
+    # Container support
+    container: bool
+    numberitems: int
+    maycontain: List[Dict[str, Any]]  # entries: { item, weight, min, max }
 
 # Database of item types (extensible)
 ITEM_DB: Dict[str, ItemType] = {}
@@ -89,17 +95,33 @@ def _load_items_from_config():
             active = bool(it.get('active', True))
             spawn_type = it.get('spawn_type')
             icon = it.get('icon')
+            special = bool(it.get('special', False))
+            # Container fields (optional)
+            container = bool(it.get('container', False))
+            numberitems = it.get('numberitems')
+            maycontain = it.get('maycontain')
             if not item_id or not name:
                 continue
-            register_item({
+            reg: ItemType = {
                 'id': str(item_id),
                 'name': str(name),
                 'allowed_slots': allowed,
                 'stats': stats,
                 'active': active,
-                **({'spawn_type': str(spawn_type)} if isinstance(spawn_type, str) and spawn_type else {}),
-                **({'icon': str(icon)} if isinstance(icon, str) and icon else {}),
-            })
+            }
+            if isinstance(spawn_type, str) and spawn_type:
+                reg['spawn_type'] = str(spawn_type)
+            if isinstance(icon, str) and icon:
+                reg['icon'] = str(icon)
+            if special:
+                reg['special'] = True
+            if container:
+                reg['container'] = True
+                if isinstance(numberitems, int) and numberitems > 0:
+                    reg['numberitems'] = int(numberitems)
+                if isinstance(maycontain, list):
+                    reg['maycontain'] = maycontain  # keep raw for game logic to interpret
+            register_item(reg)
         except Exception:
             # Skip malformed entries
             continue

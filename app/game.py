@@ -297,7 +297,7 @@ def init_grid_once():
     # Start all walls
     g = [[WALL for _ in range(GRID_W)] for _ in range(GRID_H)]
     # Generate maze into g
-    generate_maze(g, corridor_w=3, wall_w=1, room_prob=0.08)
+    generate_maze(g, corridor_w=2, wall_w=1, room_prob=0.08)
     grid = g
     # After maze, generate biomes
     biomes = generate_biomes()
@@ -466,6 +466,10 @@ def init_entities_once():
             }
         })
 
+    # Attach contents to any container items (e.g., chests) that were added
+    for ent in ents:
+        _attach_container_contents(ent)
+
     world_entities = ents
     entities_inited = True
     rebuild_solid_cells()
@@ -602,7 +606,7 @@ def chest_generator(count: int, item_id: str = 'chest_basic', image: str = 'item
     for _ in range(max(0, count)):
         cx, cy = random_empty_cell()
         pos = [float(cx) + 0.5, float(cy) + 0.5]
-        out.append({
+        ent = {
             'type': 'item',
             'item_id': item_id,
             'pos': pos,
@@ -613,9 +617,84 @@ def chest_generator(count: int, item_id: str = 'chest_basic', image: str = 'item
                 'scale': 1.0,
                 'y_offset': 0,
             }
-        })
+        }
+        _attach_container_contents(ent)
+        out.append(ent)
     return out
 
+
+def _roll_container_contents(item_type: str) -> List[Dict[str, Any]]:
+    """Roll contents for a container item based on ITEM_DB container fields.
+    Returns list of { 'item': <item_id>, 'qty': int } entries. Empty if not a container.
+    """
+    it = ITEM_DB.get(item_type) or {}
+    if not it or not it.get('container'):
+        return []
+    pool = it.get('maycontain') or []
+    if not isinstance(pool, list) or not pool:
+        return []
+    max_items = int(it.get('numberitems') or 0)
+    if max_items <= 0:
+        return []
+    # Draw N entries with replacement; N in [1, max_items]
+    draws = max(1, min(max_items, random.randint(1, max_items)))
+    # Build weight list
+    weights = []
+    for entry in pool:
+        try:
+            w = float(entry.get('weight', 1))
+        except Exception:
+            w = 1.0
+        weights.append(max(0.0, w))
+    total_w = sum(weights) or 1.0
+    # Normalize
+    probs = [w / total_w for w in weights]
+    # Helper to pick one index by cumulative probability
+    import bisect
+    cdf = []
+    s = 0.0
+    for p in probs:
+        s += p
+        cdf.append(s)
+    def pick_idx(r: float) -> int:
+        return bisect.bisect_left(cdf, r)
+    out: Dict[str, int] = {}
+    for _ in range(draws):
+        r = random.random()
+        idx = pick_idx(r)
+        idx = max(0, min(len(pool) - 1, idx))
+        e = pool[idx]
+        try:
+            qmin = int(e.get('min', 1) or 1)
+            qmax = int(e.get('max', qmin) or qmin)
+        except Exception:
+            qmin, qmax = 1, 1
+        qty = random.randint(max(1, qmin), max(1, qmax))
+        item_id = str(e.get('item') or '')
+        if not item_id:
+            continue
+        out[item_id] = out.get(item_id, 0) + qty
+    return [{'item': k, 'qty': v} for k, v in out.items() if v > 0]
+
+
+def _attach_container_contents(ent: Dict[str, Any]) -> None:
+    """If ent is a container item (e.g., chest), roll and attach contents once."""
+    try:
+        if (ent.get('type') or 'item') != 'item':
+            return
+        item_id = str(ent.get('item_id') or '')
+        if not item_id:
+            return
+        # Already has contents -> keep as-is
+        if ent.get('container') and isinstance(ent.get('contents'), list):
+            return
+        it = ITEM_DB.get(item_id) or {}
+        if not it or not it.get('container'):
+            return
+        ent['container'] = True
+        ent['contents'] = _roll_container_contents(item_id)
+    except Exception:
+        return
 
 def carve_rect(g, x0, y0, x1, y1, val=EMPTY):
     # inclusive rect bounds
@@ -767,7 +846,7 @@ def place_chest_next_to(cx: int, cy: int):
         if conflict:
             continue
         # Place chest entity
-        world_entities.append({
+        ent = {
             'type': 'item',
             'item_id': 'chest_basic',
             'pos': [float(nx) + 0.5, float(ny) + 0.5],
@@ -778,7 +857,9 @@ def place_chest_next_to(cx: int, cy: int):
                 'scale': 1.0,
                 'y_offset': 0,
             }
-        })
+        }
+        _attach_container_contents(ent)
+        world_entities.append(ent)
         rebuild_solid_cells()
         return
 
@@ -1451,8 +1532,9 @@ def run_game(screen: pygame.surface.Surface, qr_surface: pygame.surface.Surface)
 
         
 
-        # Draw entity markers (green dots) for anything placed in the world (not players/walls)
-        dot_color = (50, 220, 50)
+        # Draw entity markers after biome overlays.
+        # Chests render as yellow dots for visibility; others remain green.
+        # If visibility.show_chests is true, chests are shown even through fog.
         for ent in world_entities:
             pos = ent.get('pos') or ent.get('position')
             if not pos or len(pos) < 2:
@@ -1460,12 +1542,23 @@ def run_game(screen: pygame.surface.Surface, qr_surface: pygame.surface.Surface)
             ex, ey = float(pos[0]), float(pos[1])
             # Hide entities in unseen tiles when fog is enabled
             ix, iy = int(ex), int(ey)
-            if not (0 <= iy < GRID_H and 0 <= ix < GRID_W and visible_mask[iy][ix]):
+            # Determine marker color and chest type
+            item_id = str(ent.get('item_id') or '')
+            is_chest = item_id.startswith('chest_')
+            # Config toggle: show chests through fog
+            try:
+                show_chests_through_fog = bool((vis_cfg or {}).get('show_chests', True))
+            except Exception:
+                show_chests_through_fog = True
+            # Visibility gate: allow chests if configured, otherwise require visibility
+            tile_visible = (0 <= iy < GRID_H and 0 <= ix < GRID_W and visible_mask[iy][ix])
+            if not tile_visible and not (is_chest and show_chests_through_fog):
                 continue
+            dot_color = (240, 220, 0) if is_chest else (50, 220, 50)
             # convert grid coords (floats) to pixel space
             px = BOARD_ORIGIN_X + int(ex * TILE_SIZE)
             py = BOARD_ORIGIN_Y + int(ey * TILE_SIZE)
-            # 2x2 green dot centered-ish
+            # 2x2 dot centered-ish
             pygame.draw.rect(screen, dot_color, (px - 1, py - 1, 2, 2))
 
         # Emit simple raycast frames to each player at ~10 FPS

@@ -23,6 +23,35 @@
       if (Array.isArray(parsed)) characters = parsed;
     }
 
+  // Toggle visibility of hand icons and durability bars
+  function setHandsUiVisible(visible){
+    const disp = visible ? '' : 'none';
+    if (leftDurBar) leftDurBar.style.display = disp;
+    if (rightDurBar) rightDurBar.style.display = disp;
+    if (leftHandImg) leftHandImg.style.display = disp;
+    if (rightHandImg) rightHandImg.style.display = disp;
+  }
+  } catch(_) {}
+
+  // Render chest contents panel
+  function renderChest(state){
+    if (!chestView || !state) return;
+    const chest = state.chest || null;
+    if (!chest || !Array.isArray(chest.items)){
+      chestView.innerHTML = '<div style="opacity:0.7;">No chest nearby.</div>';
+      return;
+    }
+    const title = (chest.item_id || 'chest').replace(/^chest_/, 'Chest: ');
+    const rows = chest.items.map(it => {
+      const nm = (it && (it.name || it.id)) || '';
+      const q = (it && it.qty)|0;
+      return `<div style="display:flex; justify-content:space-between; padding:4px 0;">
+        <span>${nm}</span><strong>x${q}</strong>
+      </div>`;
+    }).join('');
+    chestView.innerHTML = `<div style="font-weight:600; margin-bottom:6px;">${title}</div>${rows || '<div style="opacity:0.7;">(Empty)</div>'}`;
+  }
+
   // Initialize ITEM_ICONS from embedded JSON if not set
   (function initItemIcons(){
     try {
@@ -34,7 +63,6 @@
       }
     } catch(_){}
   })();
-  } catch(_) {}
   const leaveTopBtn = document.getElementById('leaveTop');
   const view3d = document.getElementById('view3d');
   const ctx = view3d ? view3d.getContext('2d') : null;
@@ -135,10 +163,12 @@
   }
   const cooldownBar = document.getElementById('cooldownBar');
   const tabBackpack = document.getElementById('tabBackpack');
+  const tabChest = document.getElementById('tabChest');
   const tabStats = document.getElementById('tabStats');
   const tabLoadout = document.getElementById('tabLoadout');
   const statsView = document.getElementById('statsView');
   const loadoutView = document.getElementById('loadoutView');
+  const chestView = document.getElementById('chestView');
   let lastState = null;
   // HUD equip cache (ids)
   let hudEquip = { left: null, right: null };
@@ -219,6 +249,8 @@
     if (img) img.style.display = has && f === 0 ? 'none' : '';
   }
 
+  
+
   function extractDurInfo(item){
     if (!item) return { id: null, frac: null };
     if (typeof item === 'string') return { id: item, frac: null };
@@ -260,18 +292,29 @@
     if (!invOverlay) return;
     if (which === 'backpack'){
       backpackGrid.style.display = 'grid';
+      if (chestView) chestView.style.display = 'none';
       statsView.style.display = 'none';
       loadoutView.style.display = 'none';
     } else if (which === 'stats'){
       backpackGrid.style.display = 'none';
+      if (chestView) chestView.style.display = 'none';
       statsView.style.display = 'block';
       loadoutView.style.display = 'none';
       renderStats(lastState);
     } else if (which === 'loadout'){
       backpackGrid.style.display = 'none';
+      if (chestView) chestView.style.display = 'none';
       statsView.style.display = 'none';
       loadoutView.style.display = 'block';
       renderLoadout(lastState);
+    } else if (which === 'chest'){
+      backpackGrid.style.display = 'none';
+      statsView.style.display = 'none';
+      loadoutView.style.display = 'none';
+      if (chestView) {
+        chestView.style.display = 'block';
+        renderChest(lastState);
+      }
     }
   }
 
@@ -463,6 +506,8 @@
   if (openInvBtn) {
     openInvBtn.addEventListener('click', () => {
       if (invOverlay) invOverlay.style.display = 'block';
+      // Hide action UI while inventory is open
+      setHandsUiVisible(false);
       if (isReady()) socket.emit('action', { button: 'inventory' });
       else pending = { kind: 'action', payload: { button: 'inventory' } };
     });
@@ -471,8 +516,16 @@
   if (closeInvBtn) {
     closeInvBtn.addEventListener('click', () => {
       if (invOverlay) invOverlay.style.display = 'none';
+      // Restore action UI when inventory closes
+      setHandsUiVisible(true);
     });
   }
+
+  // Tab button listeners (top-level, not inside any function)
+  if (tabBackpack) tabBackpack.addEventListener('click', () => showTab('backpack'));
+  if (tabStats) tabStats.addEventListener('click', () => showTab('stats'));
+  if (tabLoadout) tabLoadout.addEventListener('click', () => showTab('loadout'));
+  if (tabChest) tabChest.addEventListener('click', () => showTab('chest'));
 
   function renderInventory(state){
     if (!backpackGrid || !state) return;
@@ -480,6 +533,7 @@
     const stats = state.stats || {};
     const eq = state.equipment || {};
     const inv = state.inventory || [];
+    const chest = state.chest || null;
     const rows = Math.max(0, Math.min(4, stats.backpack_size|0));
     const totalSlots = 12;
     backpackGrid.innerHTML = '';
@@ -489,6 +543,15 @@
       const rh = eq.right_hand ? eq.right_hand.name : 'Empty';
       const bp = eq.backpack ? eq.backpack.name : `Backpack: ${rows} row(s)`;
       equipSummary.textContent = `Left: ${lh} | Right: ${rh} | ${bp}`;
+    }
+    // Chest tab visibility
+    if (tabChest) {
+      if (chest && Array.isArray(chest.items) && chest.items.length){
+        tabChest.style.display = '';
+      } else {
+        tabChest.style.display = 'none';
+        if (chestView) chestView.style.display = 'none';
+      }
     }
     // Build 12 cells, fill first rows*3 as unlocked
     for (let idx = 0; idx < totalSlots; idx++){
@@ -517,6 +580,10 @@
         }
       }
       backpackGrid.appendChild(cell);
+    }
+    // If chest tab is visible and currently selected, refresh its contents
+    if (chestView && chestView.style.display !== 'none'){
+      renderChest(state);
     }
   }
 
