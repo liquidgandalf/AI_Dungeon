@@ -1,6 +1,8 @@
 # SkeletonGame/app/server.py
 import os
 import time
+import json
+import base64
 from flask import Flask, render_template, request
 from flask_socketio import SocketIO, emit
 from .items import get_item
@@ -20,6 +22,32 @@ players = {}
 ip_stats = {}  # Persist stat allocations per client IP
 remembered_names = {}  # ip -> name
 ip_profiles = {}  # ip -> persisted profile (stats/equipment/inventory/cell/angle)
+
+# Load character options (safe default if config missing)
+def _load_character_options():
+    try:
+        cfg_path = os.path.join(base_dir, 'config', 'player_config.json')
+        if os.path.exists(cfg_path):
+            with open(cfg_path, 'r') as f:
+                data = json.load(f)
+                chars = data.get('characters') or []
+                out = []
+                for c in chars:
+                    cid = (c.get('id') or '').strip()
+                    if not cid:
+                        continue
+                    name = (c.get('name') or cid).strip()
+                    img = (c.get('img') or f"players/{cid}.png").strip()
+                    out.append({'id': cid, 'name': name, 'img': img})
+                if out:
+                    return out
+    except Exception:
+        pass
+    return [
+        {'id': 'girl_elf', 'name': 'Girl Elf', 'img': 'players/girl_elf.png'},
+    ]
+
+CHARACTER_OPTIONS = _load_character_options()
 
 
 def random_alloc_stats(total: int = 24, cap: int = 5):
@@ -141,7 +169,24 @@ def _queue_and_schedule(sid: str, kind: str, payload: dict):
 def controller():
     client_ip = request.remote_addr
     default_name = remembered_names.get(client_ip, '') if client_ip else ''
-    return render_template('controller.html', default_name=default_name)
+    persisted = ip_profiles.get(client_ip or 'unknown', {})
+    default_character = persisted.get('character')
+    default_colors = persisted.get('colors') or {
+        'hair': '#00ff00',     # base mask defaults
+        'clothes': '#ff0000',
+        'skin': '#3399ff'
+    }
+    safe_ip = (client_ip or 'unknown').replace(':', '_')
+    sprite_url_guess = f"/static/img/recolored/{safe_ip}.png"
+    return render_template(
+        'controller.html',
+        default_name=default_name,
+        characters=CHARACTER_OPTIONS,
+        default_character=default_character,
+        default_colors=default_colors,
+        client_ip=safe_ip,
+        sprite_url_guess=sprite_url_guess,
+    )
 
 @socketio.on('connect')
 def on_connect():
@@ -164,6 +209,9 @@ def on_disconnect():
             'angle': p.get('angle'),
             # Persist per-player fog-of-war mask if present
             'seen': p.get('seen'),
+            'character': p.get('character') or None,
+            'colors': p.get('colors') or None,
+            'sprite_path': p.get('sprite_path') or None,
         }
         remembered_names[client_ip] = p.get('name', remembered_names.get(client_ip, ''))
         print(f"Client disconnected: {players[sid]['name']} ({sid})")
@@ -172,6 +220,9 @@ def on_disconnect():
 @socketio.on('join')
 def on_join(data):
     name = (data or {}).get('name', '').strip() or 'Player'
+    chosen_char = (data or {}).get('character')
+    chosen_colors = (data or {}).get('colors') or {}
+    sprite_data_url = (data or {}).get('spriteData')
     sid = request.sid
     client_ip = request.remote_addr or 'unknown'
     # reuse remembered name if available; otherwise remember provided name
@@ -194,6 +245,13 @@ def on_join(data):
     # Check for a persisted profile for this IP
     persisted = ip_profiles.get(client_ip, {})
 
+    # resolve character: chosen > persisted > default option
+    if not chosen_char:
+        chosen_char = persisted.get('character') or (CHARACTER_OPTIONS[0]['id'] if CHARACTER_OPTIONS else None)
+    # resolve colors: provided > persisted > defaults
+    base_defaults = {'hair': '#00ff00', 'clothes': '#ff0000', 'skin': '#3399ff'}
+    resolved_colors = {**base_defaults, **(persisted.get('colors') or {}), **chosen_colors}
+
     players[sid] = {
         'name': name,
         'pending': None,   # one-step move direction requested by controller
@@ -213,6 +271,9 @@ def on_join(data):
         'stats': {**core_stats, **persisted.get('stats', {})},
         'last_active': time.time(),
         'next_ready_ts': time.time(),
+        'character': chosen_char,
+        'colors': resolved_colors,
+        'sprite_path': None,
         # Hint to game loop to restore last known position/orientation
         'restore': {
           'cell': persisted.get('cell'),
@@ -220,6 +281,25 @@ def on_join(data):
           'seen': persisted.get('seen'),
         }
     }
+    # If client provided a recolored sprite, save it per IP under static/img/recolored/<ip>.png
+    try:
+        if isinstance(sprite_data_url, str) and sprite_data_url.startswith('data:image/png;base64,'):
+            b64 = sprite_data_url.split(',', 1)[1]
+            raw = base64.b64decode(b64)
+            rec_dir = os.path.join(static_dir, 'img', 'recolored')
+            os.makedirs(rec_dir, exist_ok=True)
+            safe_ip = (client_ip or 'unknown').replace(':', '_')
+            out_path = os.path.join(rec_dir, f"{safe_ip}.png")
+            with open(out_path, 'wb') as f:
+                f.write(raw)
+            # Public URL path
+            players[sid]['sprite_path'] = f"/static/img/recolored/{safe_ip}.png"
+        elif isinstance(persisted.get('sprite_path'), str):
+            # Reuse previously saved sprite if any
+            players[sid]['sprite_path'] = persisted['sprite_path']
+    except Exception:
+        # Ignore saving errors silently for now
+        pass
     # Restore equipment if available
     if 'equipment' in persisted:
         players[sid]['equipment'].update(persisted['equipment'] or {})

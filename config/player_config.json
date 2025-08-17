@@ -1,0 +1,6 @@
+{
+  "characters": [
+    { "id": "girl_elf", "name": "Girl Elf", "img": "players/girl_elf.png" },
+    { "id": "boy_elf",  "name": "Boy Elf",  "img": "players/boy_elf.png" }
+  ]
+}

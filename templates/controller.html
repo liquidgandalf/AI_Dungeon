@@ -6,7 +6,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <link rel="stylesheet" href="/static/css/style.css">
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-  <script>const defaultName = "{{ default_name }}";</script>
+  <script>
+    window.defaultName = "{{ default_name }}";
+    window.spriteUrlGuess = "{{ sprite_url_guess }}";
+  </script>
+  <script id="char-data" type="application/json">{{ characters|tojson }}</script>
   <script defer src="/static/js/controls.js"></script>
 </head>
 <body>
@@ -16,17 +20,60 @@
       <button id="leaveTop" class="leave" style="display:none;">Leave</button>
     </div>
     <div id="join">
-      <input id="name" type="text" placeholder="Your name" maxlength="12" value="{{ default_name }}">
-      <button id="joinBtn">Join</button>
+      <div class="row" style="gap:8px; align-items:center; flex-wrap:wrap;">
+        <input id="name" type="text" placeholder="Your name" maxlength="12" value="{{ default_name }}">
+        <select id="character" aria-label="Character" style="min-width:140px;">
+          {% set defc = default_character if default_character is defined else (characters[0].id if characters and characters[0] else '') %}
+          {% for c in characters %}
+            <option value="{{ c.id }}" {% if c.id == defc %}selected{% endif %}>{{ c.name }}</option>
+          {% endfor %}
+        </select>
+        <button id="joinBtn">Join</button>
+      </div>
+      <div class="row" style="gap:12px; align-items:center; flex-wrap:wrap; margin-top:8px;">
+        <label for="hairColor" style="display:flex; gap:6px; align-items:center;">
+          <span style="min-width:56px;">Hair</span>
+          <input id="hairColor" type="color" value="{{ default_colors.hair if default_colors and default_colors.hair else '#00ff00' }}">
+        </label>
+        <label for="clothesColor" style="display:flex; gap:6px; align-items:center;">
+          <span style="min-width:56px;">Clothes</span>
+          <input id="clothesColor" type="color" value="{{ default_colors.clothes if default_colors and default_colors.clothes else '#ff0000' }}">
+        </label>
+        <label for="skinColor" style="display:flex; gap:6px; align-items:center;">
+          <span style="min-width:56px;">Skin</span>
+          <input id="skinColor" type="color" value="{{ default_colors.skin if default_colors and default_colors.skin else '#3399ff' }}">
+        </label>
+        <label for="brightness" style="display:flex; gap:6px; align-items:center;">
+          <span style="min-width:76px;">Brightness</span>
+          <input id="brightness" type="range" min="-100" max="100" value="0" step="1" style="width:160px;">
+        </label>
+        <label for="contrast" style="display:flex; gap:6px; align-items:center;">
+          <span style="min-width:76px;">Contrast</span>
+          <input id="contrast" type="range" min="-100" max="100" value="0" step="1" style="width:160px;">
+        </label>
+      </div>
+      <div class="row" style="margin-top:8px; justify-content:center; gap:16px;">
+        {% set defimg = '' %}
+        {% if characters and characters[0] %}
+          {% set defimg = characters[0].img %}
+          {% if default_character is defined %}
+            {% for c in characters %}
+              {% if c.id == default_character %}{% set defimg = c.img %}{% endif %}
+            {% endfor %}
+          {% endif %}
+        {% endif %}
+        <img id="charPreview" alt="Preview (base)" src="/static/img/{{ defimg }}" style="display:none; max-height:240px; image-rendering: pixelated; border:1px solid #333; border-radius:6px; padding:4px; background:#111;" />
+        <canvas id="charPreviewCanvas" width="128" height="256" style="max-height:240px; image-rendering: pixelated; border:1px solid #333; border-radius:6px; padding:4px; background:#111;"></canvas>
+      </div>
     </div>
 
     <div id="pad" class="pad" style="display:none;">
       <div class="row" style="justify-content:center;">
         <canvas id="view3d" width="400" height="160" style="border:1px solid #333; max-width:100%;"></canvas>
       </div>
-      <div class="row" style="gap:12px; justify-content:center;">
+      <div class="row" style="gap:12px; justify-content:center; align-items:center;">
         <button id="leftAction" class="btn alt" aria-label="Left Action"><span class="sr">Left Action</span></button>
-        <button id="openInventory" class="btn alt" aria-label="Inventory"><span class="sr">Inventory</span></button>
+        <img id="openInventory" src="{{ sprite_url_guess }}" alt="You" title="Inventory" style="height:128px; image-rendering: pixelated; border:1px solid #333; border-radius:6px; padding:2px; background:#111;" onerror="this.style.display='none'" />
         <button id="rightAction" class="btn alt" aria-label="Right Action"><span class="sr">Right Action</span></button>
       </div>
       <!-- Cooldown Timer Bar -->

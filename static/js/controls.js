@@ -7,6 +7,22 @@
   const titleEl = document.getElementById('title');
   const nameInput = document.getElementById('name');
   const joinBtn = document.getElementById('joinBtn');
+  const charSelect = document.getElementById('character');
+  const charPreview = document.getElementById('charPreview');
+  const charCanvas = document.getElementById('charPreviewCanvas');
+  const charDataEl = document.getElementById('char-data');
+  const hairColorInput = document.getElementById('hairColor');
+  const clothesColorInput = document.getElementById('clothesColor');
+  const skinColorInput = document.getElementById('skinColor');
+  const brightnessInput = document.getElementById('brightness');
+  const contrastInput = document.getElementById('contrast');
+  let characters = [];
+  try {
+    if (charDataEl && charDataEl.textContent) {
+      const parsed = JSON.parse(charDataEl.textContent);
+      if (Array.isArray(parsed)) characters = parsed;
+    }
+  } catch(_) {}
   const leaveTopBtn = document.getElementById('leaveTop');
   const view3d = document.getElementById('view3d');
   const ctx = view3d ? view3d.getContext('2d') : null;
@@ -17,6 +33,94 @@
   const closeInvBtn = document.getElementById('closeInventory');
   const backpackGrid = document.getElementById('backpackGrid');
   const equipSummary = document.getElementById('equipSummary');
+
+  // Live recolor preview helpers
+  const idToChar = () => new Map(characters.map(c => [c.id, c]));
+  const getSelectedCharImgPath = () => {
+    const map = idToChar();
+    const c = map.get(charSelect?.value) || characters[0];
+    return c && c.img ? ('/static/img/' + c.img.replace(/^\/+/, '')) : null;
+  };
+
+  function hexToRgb(hex){
+    if (!hex) return [0,0,0];
+    const h = hex.replace('#','');
+    const v = h.length === 3 ? h.split('').map(ch=>ch+ch).join('') : h;
+    const n = parseInt(v,16);
+    return [(n>>16)&255, (n>>8)&255, n&255];
+  }
+
+  function recolorImageToCanvas(img, canvas, hairHex, clothesHex, skinHex){
+    if (!img || !canvas) return;
+    const w = img.naturalWidth || img.width;
+    const h = img.naturalHeight || img.height;
+    canvas.width = w; canvas.height = h;
+    const ctx2 = canvas.getContext('2d', { willReadFrequently: true });
+    ctx2.imageSmoothingEnabled = false;
+    ctx2.drawImage(img, 0, 0);
+    const imgData = ctx2.getImageData(0, 0, w, h);
+    const d = imgData.data;
+    const [hr,hg,hb] = hexToRgb(hairHex);
+    const [cr,cg,cb] = hexToRgb(clothesHex);
+    const [sr,sg,sb] = hexToRgb(skinHex);
+    for (let i=0; i<d.length; i+=4){
+      const r=d[i], g=d[i+1], b=d[i+2], a=d[i+3];
+      if (a === 0) continue;
+      // Soft mask weights from channel dominance
+      let wr = Math.max(0, r - Math.max(g, b));
+      let wg = Math.max(0, g - Math.max(r, b));
+      let wb = Math.max(0, b - Math.max(r, g));
+      const sum = wr + wg + wb;
+      if (sum <= 0){
+        // Keep original for neutrals/greys
+        continue;
+      }
+      wr /= sum; wg /= sum; wb /= sum;
+      // Preserve shading using luminance
+      const lum = (0.2126*r + 0.7152*g + 0.0722*b) / 255;
+      let nr = 0, ng = 0, nb = 0;
+      if (wg>0){ nr += hr * wg * lum; ng += hg * wg * lum; nb += hb * wg * lum; }
+      if (wr>0){ nr += cr * wr * lum; ng += cg * wr * lum; nb += cb * wr * lum; }
+      if (wb>0){ nr += sr * wb * lum; ng += sg * wb * lum; nb += sb * wb * lum; }
+      d[i] = Math.max(0, Math.min(255, nr|0));
+      d[i+1] = Math.max(0, Math.min(255, ng|0));
+      d[i+2] = Math.max(0, Math.min(255, nb|0));
+    }
+    // Apply brightness/contrast adjustments post-recolor
+    const bVal = brightnessInput ? parseInt(brightnessInput.value || '0', 10) : 0; // [-100..100]
+    const cVal = contrastInput ? parseInt(contrastInput.value || '0', 10) : 0; // [-100..100]
+    if (bVal !== 0 || cVal !== 0){
+      const brightness = bVal; // simple additive
+      const factor = (259 * (cVal + 255)) / (255 * (259 - cVal));
+      for (let i=0; i<d.length; i+=4){
+        // skip alpha 0
+        if (d[i+3] === 0) continue;
+        let r = d[i], g = d[i+1], b = d[i+2];
+        r = factor * (r - 128) + 128 + brightness;
+        g = factor * (g - 128) + 128 + brightness;
+        b = factor * (b - 128) + 128 + brightness;
+        d[i] = Math.max(0, Math.min(255, r|0));
+        d[i+1] = Math.max(0, Math.min(255, g|0));
+        d[i+2] = Math.max(0, Math.min(255, b|0));
+      }
+    }
+    ctx2.putImageData(imgData, 0, 0);
+  }
+
+  let currentImg = null;
+  function loadAndRenderPreview(){
+    const src = getSelectedCharImgPath();
+    if (!src || !charCanvas) return;
+    const hair = hairColorInput ? hairColorInput.value : '#00ff00';
+    const clothes = clothesColorInput ? clothesColorInput.value : '#ff0000';
+    const skin = skinColorInput ? skinColorInput.value : '#3399ff';
+    const img = new Image();
+    img.onload = () => {
+      currentImg = img;
+      recolorImageToCanvas(img, charCanvas, hair, clothes, skin);
+    };
+    img.src = src + (src.includes('?') ? '&' : '?') + 't=' + Date.now(); // bust cache on changes
+  }
   const cooldownBar = document.getElementById('cooldownBar');
   const tabBackpack = document.getElementById('tabBackpack');
   const tabStats = document.getElementById('tabStats');
@@ -154,9 +258,46 @@
     socket.emit('control', { command: normalizeCmd(cmd) });
   }
 
+  if (charSelect && charPreview && Array.isArray(characters)){
+    // ensure preview matches current selection
+    const byId = new Map(characters.map(c => [c.id, c]));
+    const updatePreview = () => {
+      const cid = charSelect.value;
+      const c = byId.get(cid) || characters[0];
+      if (c && c.img) charPreview.src = '/static/img/' + c.img.replace(/^\/+/, '');
+    };
+    charSelect.addEventListener('change', () => {
+      updatePreview();
+      loadAndRenderPreview();
+    });
+    updatePreview();
+  }
+
+  // Update recolor when colors change
+  [hairColorInput, clothesColorInput, skinColorInput, brightnessInput, contrastInput].forEach(inp => {
+    if (!inp) return;
+    inp.addEventListener('input', () => {
+      if (currentImg && charCanvas){
+        recolorImageToCanvas(currentImg, charCanvas, hairColorInput.value, clothesColorInput.value, skinColorInput.value);
+      } else {
+        loadAndRenderPreview();
+      }
+    });
+  });
+
+  // Initial preview render
+  loadAndRenderPreview();
+
   joinBtn.addEventListener('click', () => {
-    const name = (nameInput.value || '').trim() || defaultName || 'Player';
-    socket.emit('join', { name });
+    const name = (nameInput.value || '').trim() || (window.defaultName || 'Player');
+    const character = charSelect ? charSelect.value : undefined;
+    const colors = {
+      hair: hairColorInput ? hairColorInput.value : undefined,
+      clothes: clothesColorInput ? clothesColorInput.value : undefined,
+      skin: skinColorInput ? skinColorInput.value : undefined,
+    };
+    const spriteData = (charCanvas && typeof charCanvas.toDataURL === 'function') ? charCanvas.toDataURL('image/png') : undefined;
+    socket.emit('join', { name, character, colors, spriteData });
   });
 
   (padDiv.querySelectorAll('.btn') || []).forEach(btn => {
@@ -167,10 +308,37 @@
 
   if (leaveTopBtn) {
     leaveTopBtn.addEventListener('click', () => {
-      // no dedicated leave event; refresh to reset session
-      location.reload();
+      socket.emit('leave');
+      // Immediately return to login UI for responsiveness
+      showPad(false);
+      if (titleEl) titleEl.textContent = 'Join';
+      leaveTopBtn.style.display = 'none';
+      // Hide inventory overlay if open
+      if (invOverlay) invOverlay.style.display = 'none';
     });
   }
+
+  // When the server confirms join, refresh the inventory portrait to the saved recolored sprite
+  socket.on('joined', () => {
+    const portrait = document.getElementById('openInventory');
+    if (portrait && window.spriteUrlGuess){
+      const bust = (window.spriteUrlGuess.includes('?') ? '&' : '?') + 't=' + Date.now();
+      portrait.src = window.spriteUrlGuess + bust;
+      portrait.style.display = '';
+    }
+    showPad(true);
+    // Update header: switch from "Join" to a top Leave button
+    if (titleEl) titleEl.textContent = 'Controller';
+    if (leaveTopBtn) leaveTopBtn.style.display = 'inline-block';
+  });
+
+  // Server acknowledges leave; ensure UI is back on login
+  socket.on('left', () => {
+    showPad(false);
+    if (titleEl) titleEl.textContent = 'Join';
+    if (leaveTopBtn) leaveTopBtn.style.display = 'none';
+    if (invOverlay) invOverlay.style.display = 'none';
+  });
 
   if (leftActionBtn) {
     leftActionBtn.addEventListener('click', () => {
