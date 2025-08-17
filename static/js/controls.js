@@ -45,6 +45,9 @@
   const closeInvBtn = document.getElementById('closeInventory');
   const backpackGrid = document.getElementById('backpackGrid');
   const equipSummary = document.getElementById('equipSummary');
+  // New HUD durability bars below controls
+  const hudLeftDurEl = document.getElementById('hudLeftDur');
+  const hudRightDurEl = document.getElementById('hudRightDur');
 
   // Live recolor preview helpers
   const idToChar = () => new Map(characters.map(c => [c.id, c]));
@@ -201,6 +204,21 @@
   const leftDurBar = ensureDurBar(leftActionBtn);
   const rightDurBar = ensureDurBar(rightActionBtn);
 
+  // Horizontal HUD bars (10 segments left-to-right)
+  function ensureHudDurBar(root){
+    if (!root) return null;
+    if (root.childElementCount < 1){
+      for (let i = 0; i < 10; i++){
+        const seg = document.createElement('div');
+        seg.className = 'hudDurSeg ' + (i < 2 ? 'red' : 'green');
+        root.appendChild(seg);
+      }
+    }
+    return root;
+  }
+  ensureHudDurBar(hudLeftDurEl);
+  ensureHudDurBar(hudRightDurEl);
+
   function setDurBar(side, fraction, hasItem){
     const bar = side === 'left' ? leftDurBar : rightDurBar;
     const img = side === 'left' ? leftHandImg : rightHandImg;
@@ -217,6 +235,22 @@
     bar.style.display = has ? '' : 'none';
     // if durability is zero, hide the icon overlay to reflect broken item visually
     if (img) img.style.display = has && f === 0 ? 'none' : '';
+  }
+
+  // Update horizontal HUD durability bars
+  function setHudDurBar(side, fraction, hasItem){
+    const root = side === 'left' ? hudLeftDurEl : hudRightDurEl;
+    if (!root) return;
+    const segs = root.querySelectorAll('.hudDurSeg');
+    if (!segs || !segs.length) return;
+    const has = !!hasItem;
+    root.style.visibility = has ? 'visible' : 'hidden';
+    if (!has) return;
+    let f = typeof fraction === 'number' && isFinite(fraction) ? Math.max(0, Math.min(1, fraction)) : 1;
+    const filled = Math.round(f * 10);
+    segs.forEach((seg, idx) => {
+      if (idx < filled) seg.classList.add('filled'); else seg.classList.remove('filled');
+    });
   }
 
   function extractDurInfo(item){
@@ -953,9 +987,13 @@
       hudEquip.right = R.id;
       setDurBar('left', L.frac, !!L.id);
       setDurBar('right', R.frac, !!R.id);
+      setHudDurBar('left', L.frac, !!L.id);
+      setHudDurBar('right', R.frac, !!R.id);
     } catch(_){
       setDurBar('left', null, false);
       setDurBar('right', null, false);
+      setHudDurBar('left', null, false);
+      setHudDurBar('right', null, false);
     }
     updateHandIcons();
   });
@@ -970,9 +1008,13 @@
       hudEquip.right = R.id;
       setDurBar('left', L.frac, !!L.id);
       setDurBar('right', R.frac, !!R.id);
+      setHudDurBar('left', L.frac, !!L.id);
+      setHudDurBar('right', R.frac, !!R.id);
     } catch(_){
       setDurBar('left', null, false);
       setDurBar('right', null, false);
+      setHudDurBar('left', null, false);
+      setHudDurBar('right', null, false);
     }
     updateHandIcons();
   });

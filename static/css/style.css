@@ -70,3 +70,22 @@ button { padding: 12px 16px; font-size: 18px; border-radius: 8px; border: none; 
 .durSeg.filled { opacity: 1; }
 .durSeg.red { background: #e33; }
 .durSeg.green { background: #3c3; }
+
+/* HUD horizontal durability bars */
+.hudDurWrap { min-width: 180px; }
+.hudDurLabel { font-size: 12px; color:#bbb; margin-bottom: 4px; text-align:center; }
+.hudDurBar {
+  width: 220px;
+  height: 10px;
+  background: #222;
+  border: 1px solid #333;
+  border-radius: 6px;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 1px;
+}
+.hudDurSeg { height: 100%; opacity: 0.2; }
+.hudDurSeg.filled { opacity: 1; }
+.hudDurSeg.red { background:#e33; }
+.hudDurSeg.green { background:#3c3; }
