@@ -194,6 +194,30 @@ def render_enemy_pings(screen: pygame.surface.Surface, visible: List[List[bool]]
         screen.blit(surf, (px + TILE_SIZE//2 - (r+2), py + TILE_SIZE//2 - (r+2)))
 
 
+def _special_item_ids() -> List[str]:
+    try:
+        return [iid for iid, it in ITEM_DB.items() if bool((it or {}).get('special'))]
+    except Exception:
+        return []
+
+
+def _enemy_type_lists() -> Tuple[List[str], List[str], List[str]]:
+    """Return (normal_types, sub_boss_types, big_boss_types)."""
+    types = get_enemy_type_map()
+    normal, sub_boss, big_boss = [], [], []
+    for t_id, info in types.items():
+        if not t_id:
+            continue
+        if bool(info.get('boss')):
+            if (info.get('tier') or '').lower() == 'super':
+                big_boss.append(t_id)
+            else:
+                sub_boss.append(t_id)
+        else:
+            normal.append(t_id)
+    return normal, sub_boss, big_boss
+
+
 def init_random_enemies_once():
     """Spawn a configurable number of random enemies scattered across the map.
     Uses game_config.spawns.random_enemies. Places only on EMPTY tiles, not in
@@ -202,37 +226,87 @@ def init_random_enemies_once():
     global random_enemies_inited
     if random_enemies_inited:
         return
+    # We will compute our own counts based on special-item and boss rules
     try:
         cfg = game_config.get_game_config()
-        count = int(((cfg or {}).get('spawns') or {}).get('random_enemies', 0))
     except Exception:
-        count = 0
-    if count <= 0:
-        return
+        cfg = {}
     types = game_config.get_enemy_types()
     type_ids = [t.get('type') for t in types if t.get('type')]
     if not type_ids:
         return
     occ = set(enemy_occupied_cells().keys())
 
+    # Build type groups and special item pool
+    normal_types, sub_boss_types, big_boss_types = _enemy_type_lists()
+    special_items = _special_item_ids()
+    random.shuffle(special_items)
+
+    # Spawn all sub bosses and big bosses once
     spawned = 0
-    attempts = 0
-    max_attempts = max(200, count * 50)
-    while spawned < count and attempts < max_attempts:
-        attempts += 1
-        x = random.randint(1, GRID_W - 2)
-        y = random.randint(1, GRID_H - 2)
-        if grid[y][x] != EMPTY:
-            continue
-        if (x, y) in solid_cells:
-            continue
-        if (x, y) in occ:
-            continue
-        etype = random.choice(type_ids)
-        inst = make_enemy_instance(etype, x, y, spawner_id=None)
+    def _spawn_of_type(tid: str) -> Dict[str, Any]:
+        # find empty cell
+        x, y = random_empty_cell()
+        inst = make_enemy_instance(tid, x, y, spawner_id=None)
         enemies[inst['id']] = inst
         occ.add((x, y))
+        return inst
+
+    # 1) Spawn 18 slimes, each carrying one unique special item (green ping)
+    slime_types = [t for t in normal_types if t.startswith('slime_')]
+    if not slime_types:
+        # fallback: treat all normal types as slime candidates
+        slime_types = list(normal_types)
+    carry_items = list(special_items[:18])
+    # Ensure we have up to 18
+    carry_items = carry_items[:18]
+    for i, itm in enumerate(carry_items):
+        tid = slime_types[i % max(1, len(slime_types))] if slime_types else None
+        if not tid:
+            break
+        inst = _spawn_of_type(tid)
         spawned += 1
+        inst['carried_items'] = [itm]
+        inst['carried_item'] = itm
+        # Green ping for item carriers (non-boss)
+        inst['pingcolour'] = [60, 220, 60]
+
+    # 2) Spawn all bosses (sub=yellow, big=red)
+    all_special = _special_item_ids()
+    # Prepare big-boss global uniqueness for affinities
+    used_big_affinity: set = set()
+    # Sub bosses: allocate fear/desire/vulnerable (can overlap globally)
+    for tid in sub_boss_types:
+        inst = _spawn_of_type(tid)
+        spawned += 1
+        inst['pingcolour'] = [255, 255, 0]
+        # Assign 3 distinct items for affinities
+        pool = list(all_special)
+        random.shuffle(pool)
+        picks = pool[:3]
+        inst['affinities'] = {
+            'fear': (picks[0] if len(picks) > 0 else None),
+            'desire': (picks[1] if len(picks) > 1 else None),
+            'vulnerable': (picks[2] if len(picks) > 2 else None),
+        }
+    # Big bosses: allocate 3 items each with no overlap across big bosses
+    for tid in big_boss_types:
+        inst = _spawn_of_type(tid)
+        spawned += 1
+        inst['pingcolour'] = [255, 60, 60]
+        # Build pool excluding used
+        pool = [i for i in all_special if i not in used_big_affinity]
+        random.shuffle(pool)
+        picks = pool[:3] if len(pool) >= 3 else pool
+        for p in picks:
+            used_big_affinity.add(p)
+        inst['affinities'] = {
+            'fear': (picks[0] if len(picks) > 0 else None),
+            'desire': (picks[1] if len(picks) > 1 else None),
+            'vulnerable': (picks[2] if len(picks) > 2 else None),
+        }
+
+    # For this test mode, do not add extra random enemies; total is 18 slimes + all bosses
     random_enemies_inited = True
 
 
@@ -261,6 +335,11 @@ def render_enemies(screen: pygame.surface.Surface, visible: List[List[bool]] = N
         pygame.draw.circle(screen, color, center, radius)
         outline = tuple(max(0, c - 60) for c in color)
         pygame.draw.circle(screen, outline, center, radius, width=2)
+        # If enemy carries an item, draw a small marker (placeholder for icon)
+        if e.get('carried_item'):
+            mx, my = center[0] + radius + 2, center[1] - radius
+            pygame.draw.rect(screen, (240, 255, 240), (mx, my, 6, 6))
+            pygame.draw.rect(screen, (60, 100, 60), (mx, my, 6, 6), width=1)
 
 # Biomes grid parallel to 'grid' holding biome id per tile: 0..6
 biomes: List[List[int]] = []
