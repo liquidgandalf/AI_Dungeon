@@ -3,6 +3,10 @@
     "type": "slime_green",
     "name": "Green Slime",
     "image": "slime_green.png",
+    "render": {
+      "scale_curve": [[1, 1.05], [2, 1.0], [3, 0.95], [5, 0.9]],
+      "y_bias_curve": [[1, 0], [2, -2], [3, -4], [5, -6]]
+    },
     "pingcolour": [80, 200, 120],
     "biome": null,
     "spawner": null,
@@ -34,6 +38,10 @@
     "type": "slime_blue",
     "name": "Blue Slime",
     "image": "slime_blue.png",
+    "render": {
+      "scale_curve": [[1, 1.05], [2, 1.0], [3, 0.95], [5, 0.9]],
+      "y_bias_curve": [[1, 0], [2, -2], [3, -4], [5, -6]]
+    },
     "pingcolour": [80, 140, 255],
     "biome": null,
     "spawner": null,
@@ -65,6 +73,10 @@
     "type": "slime_red",
     "name": "Red Slime",
     "image": "slime_red.png",
+    "render": {
+      "scale_curve": [[1, 1.05], [2, 1.0], [3, 0.95], [5, 0.9]],
+      "y_bias_curve": [[1, 0], [2, -2], [3, -4], [5, -6]]
+    },
     "pingcolour": [220, 80, 80],
     "biome": null,
     "spawner": null,
@@ -97,6 +109,10 @@
     "type": "boss_water_thalryss",
     "name": "Thalryss the Drowned Empress",
     "image": "Thalryss the Drowned Empress.png",
+    "render": {
+      "scale_curve": [[1, 1.05], [2, 1.0], [3, 0.95], [5, 0.9]],
+      "y_bias_curve": [[1, 0], [2, -2], [3, -4], [5, -6]]
+    },
     "pingcolour": [80, 140, 255],
     "biome": null,
     "spawner": null,
@@ -132,6 +148,10 @@
     "type": "boss_water_kravenor",
     "name": "Kravenor, Abyssal Leviathan",
     "image": "Kravenor Abyssal Leviathan.png",
+    "render": {
+      "scale_curve": [[1, 1.05], [2, 1.0], [3, 0.95], [5, 0.9]],
+      "y_bias_curve": [[1, 0], [2, -2], [3, -4], [5, -6]]
+    },
     "pingcolour": [80, 140, 255],
     "biome": null,
     "spawner": null,
@@ -167,6 +187,10 @@
     "type": "super_water_leviathra",
     "name": "Leviathra Queen of the Deep",
     "image": "Leviathra Queen of the Deep.png",
+    "render": {
+      "scale_curve": [[1, 1.05], [2, 1.0], [3, 0.95], [5, 0.9]],
+      "y_bias_curve": [[1, 0], [2, -2], [3, -4], [5, -6]]
+    },
     "pingcolour": [60, 120, 255],
     "biome": null,
     "spawner": null,
@@ -202,6 +226,10 @@
     "type": "boss_earth_gravemaw",
     "name": "Gravemaw, Colossus of Stone",
     "image": "Gravemaw Colossus of Stone.png",
+    "render": {
+      "scale_curve": [[1, 1.05], [2, 1.0], [3, 0.95], [5, 0.9]],
+      "y_bias_curve": [[1, 0], [2, -2], [3, -4], [5, -6]]
+    },
     "pingcolour": [140, 110, 60],
     "biome": null,
     "spawner": null,
@@ -237,6 +265,10 @@
     "type": "boss_earth_veythra",
     "name": "Veythra, Root of Decay",
     "image": "Veythra Root of Decay.png",
+    "render": {
+      "scale_curve": [[1, 1.05], [2, 1.0], [3, 0.95], [5, 0.9]],
+      "y_bias_curve": [[1, 0], [2, -2], [3, -4], [5, -6]]
+    },
     "pingcolour": [140, 110, 60],
     "biome": null,
     "spawner": null,
@@ -272,6 +304,10 @@
     "type": "super_earth_sylthrak",
     "name": "Sylthrak, the Withering Titan",
     "image": "Sylthrak the Withering Titan.png",
+    "render": {
+      "scale_curve": [[1, 1.05], [2, 1.0], [3, 0.95], [5, 0.9]],
+      "y_bias_curve": [[1, 0], [2, -2], [3, -4], [5, -6]]
+    },
     "pingcolour": [130, 100, 55],
     "biome": null,
     "spawner": null,
@@ -307,6 +343,10 @@
     "type": "boss_fire_pyrrhion",
     "name": "Pyrrhion, Lord of Cinders",
     "image": "Pyrrhion Lord of Cinders.png",
+    "render": {
+      "scale_curve": [[1, 1.05], [2, 1.0], [3, 0.95], [5, 0.9]],
+      "y_bias_curve": [[1, 0], [2, -2], [3, -4], [5, -6]]
+    },
     "pingcolour": [220, 80, 80],
     "biome": null,
     "spawner": null,
@@ -342,6 +382,10 @@
     "type": "boss_fire_ignivrax",
     "name": "Ignivrax, the Infernal Phoenix",
     "image": "Ignivrax the Infernal Phoenix.png",
+    "render": {
+      "scale_curve": [[1, 1.05], [2, 1.0], [3, 0.95], [5, 0.9]],
+      "y_bias_curve": [[1, 0], [2, -2], [3, -4], [5, -6]]
+    },
     "pingcolour": [240, 100, 60],
     "biome": null,
     "spawner": null,
@@ -377,6 +421,10 @@
     "type": "super_fire_cindralok",
     "name": "Cindralok, the Ashen Reborn",
     "image": "Cindralok the Ashen Reborn.png",
+    "render": {
+      "scale_curve": [[1, 1.05], [2, 1.0], [3, 0.95], [5, 0.9]],
+      "y_bias_curve": [[1, 0], [2, -2], [3, -4], [5, -6]]
+    },
     "pingcolour": [255, 120, 60],
     "biome": null,
     "spawner": null,
@@ -412,6 +460,10 @@
     "type": "super_fire_ignivrax",
     "name": "Ignivrax the Infernal Phoenix",
     "image": "Ignivrax the Infernal Phoenix.png",
+    "render": {
+      "scale_curve": [[1, 1.05], [2, 1.0], [3, 0.95], [5, 0.9]],
+      "y_bias_curve": [[1, 0], [2, -2], [3, -4], [5, -6]]
+    },
     "pingcolour": [255, 120, 60],
     "biome": null,
     "spawner": null,

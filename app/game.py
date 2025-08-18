@@ -96,6 +96,34 @@ from app import config as game_config
 from app.items import ITEM_DB, get_weight, backpack_capacity, register_item, get_item
 from app import enemy_ai
 
+# --- Rendering tuning helpers ---
+def _sample_curve(points: List[List[float]] | List[Tuple[float, float]], x: float, default: float = 1.0) -> float:
+    """Sample a piecewise-linear curve defined by [[x0, y0], [x1, y1], ...].
+    - If points is missing/invalid, return default.
+    - If x is below first knot, return y0; if above last, return y_last.
+    - Otherwise, linearly interpolate between surrounding knots.
+    """
+    try:
+        pts = list(points or [])
+        if not pts:
+            return float(default)
+        # Ensure sorted by x
+        pts = sorted([(float(px), float(py)) for (px, py) in pts], key=lambda p: p[0])
+        if x <= pts[0][0]:
+            return float(pts[0][1])
+        if x >= pts[-1][0]:
+            return float(pts[-1][1])
+        # Find segment
+        for i in range(1, len(pts)):
+            x0, y0 = pts[i-1]
+            x1, y1 = pts[i]
+            if x0 <= x <= x1:
+                t = 0.0 if x1 == x0 else (float(x) - x0) / (x1 - x0)
+                return float(y0 + t * (y1 - y0))
+        return float(default)
+    except Exception:
+        return float(default)
+
 # Screen and board
 SCREEN_WIDTH = 1280
 SCREEN_HEIGHT = 720
@@ -145,6 +173,8 @@ SCROLLS_GENERATED: bool = False
 PILLARS_SPAWNED: bool = False
 # One-time QA pillar at start area control
 START_PILLAR_PLACED: bool = False
+# One-time QA test items near start control
+TEST_ITEMS_SPAWNED: bool = False
 # World log flag
 WORLD_LOG_WRITTEN: bool = False
 # Cells blocked by solid entities (e.g., items/props/spawners)
@@ -1740,6 +1770,98 @@ def place_pillar_next_to(cx: int, cy: int, welcome: bool = False):
     return False
 
 
+def maybe_spawn_test_items_near_start(cx: int, cy: int) -> None:
+    """If QA test mode is enabled in config, spawn a configured item at fixed
+    distances near the first player's start area, preferring positions next to a wall.
+    Runs once per run.
+    """
+    global TEST_ITEMS_SPAWNED
+    if TEST_ITEMS_SPAWNED:
+        return
+    try:
+        cfg = game_config.get_game_config() or {}
+        qa = (cfg.get('qa') or {}).get('test_item') or {}
+        enabled = bool(qa.get('enabled', False))
+        if not enabled:
+            return
+        item_id = str(qa.get('item_id') or 'pillar_of_knowledge')
+        distances = qa.get('distances') or [1, 2, 3, 4, 5]
+        if not isinstance(distances, list):
+            distances = [1, 2, 3, 4, 5]
+        spawn_next_to_wall = bool(qa.get('spawn_next_to_wall', True))
+        per_dist = int(qa.get('spawn_count_per_dist', 1) or 1)
+    except Exception:
+        return
+
+    def empty_and_valid(tx: int, ty: int) -> bool:
+        if not (0 <= tx < GRID_W and 0 <= ty < GRID_H):
+            return False
+        if grid[ty][tx] != EMPTY:
+            return False
+        if (tx, ty) in occupied or (tx, ty) in solid_cells:
+            return False
+        for ent in world_entities:
+            pos = ent.get('pos') or ent.get('position')
+            if not pos or len(pos) < 2:
+                continue
+            ex, ey = int(float(pos[0])), int(float(pos[1]))
+            if ex == tx and ey == ty:
+                return False
+        return True
+
+    def adj_to_wall(tx: int, ty: int) -> bool:
+        for dx, dy in ((1,0),(-1,0),(0,1),(0,-1)):
+            nx, ny = tx + dx, ty + dy
+            if 0 <= nx < GRID_W and 0 <= ny < GRID_H and grid[ny][nx] == WALL:
+                return True
+        return False
+
+    spawned_any = False
+    # Prefer +x direction into the maze; fallback to other straight directions
+    dirs = [(1,0), (-1,0), (0,1), (0,-1)]
+    for d in distances:
+        placed_for_d = 0
+        for (dx, dy) in dirs:
+            if placed_for_d >= per_dist:
+                break
+            tx, ty = cx + dx * int(d), cy + dy * int(d)
+            if not empty_and_valid(tx, ty):
+                continue
+            if spawn_next_to_wall and not adj_to_wall(tx, ty):
+                # Try to nudge along perpendicular by 1 to hug a wall if available
+                nudges = [(0,1), (0,-1), (1,0), (-1,0)] if dx != 0 else [(1,0), (-1,0), (0,1), (0,-1)]
+                found = False
+                for ndx, ndy in nudges:
+                    ntx, nty = tx + ndx, ty + ndy
+                    if empty_and_valid(ntx, nty) and adj_to_wall(ntx, nty):
+                        tx, ty = ntx, nty
+                        found = True
+                        break
+                if not found:
+                    # If we insist on wall-adjacent but none found nearby, allow original if ok
+                    if not adj_to_wall(tx, ty):
+                        continue
+            # Spawn entity
+            ent = {
+                'type': 'item',
+                'item_id': item_id,
+                'pos': [float(tx) + 0.5, float(ty) + 0.5],
+                'sprite': {
+                    'image': f'items/{item_id}.png',
+                    'base_width': 64,
+                    'base_height': 64,
+                    'scale': 1.0,
+                    'y_offset': 0,
+                }
+            }
+            world_entities.append(ent)
+            placed_for_d += 1
+            spawned_any = True
+    if spawned_any:
+        rebuild_solid_cells()
+        TEST_ITEMS_SPAWNED = True
+
+
 def tick_enemies():
     """Basic timed random movement per enemy based on speed stat.
     speed 0 => no movement. speed 1 => ~3s per move. speed 256 => ~1s per move.
@@ -1914,6 +2036,8 @@ def ensure_player(sid: str):
         # For testing: place a single welcome pillar adjacent to the FIRST NEW spawn only
         if restore_cell is None and not START_PILLAR_PLACED:
             place_pillar_next_to(cx, cy, welcome=True)
+            # Optionally spawn configured QA test items at fixed distances near start
+            maybe_spawn_test_items_near_start(cx, cy)
 
 
 def apply_command(pos: Tuple[int, int], cmd: str) -> Tuple[int, int]:
@@ -1947,6 +2071,25 @@ def run_game(screen: pygame.surface.Surface, qr_surface: pygame.surface.Surface)
     ROT_STEP = math.radians(45)  # target step per left/right command
     ROT_SPEED = math.radians(360)  # deg/sec for smooth rotation
 
+    # Live tuning state (loaded from config, adjustable via UI)
+    try:
+        _cfg = game_config.get_game_config() or {}
+        _tun = (_cfg.get('tuning') or {}) if isinstance(_cfg, dict) else {}
+        item_floor_bias_px = int(_tun.get('item_floor_bias_px', 0) or 0)
+        item_bias_step_px = max(1, int(_tun.get('item_bias_step_px', 1) or 1))
+        # Live scale bias (multiplier) and step for tuning item size
+        item_scale_bias_mult = float(_tun.get('item_scale_bias_mult', 1.0) or 1.0)
+        item_scale_step = float(_tun.get('item_scale_step', 0.05) or 0.05)
+    except Exception:
+        item_floor_bias_px = 0
+        item_bias_step_px = 1
+        item_scale_bias_mult = 1.0
+        item_scale_step = 0.05
+
+    # UI button rects for per-player controls (rebuilt each frame)
+    ui_bias_buttons = {}  # sid -> { 'up': Rect, 'down': Rect }
+    ui_scale_buttons = {}  # sid -> { 'up': Rect, 'down': Rect }
+
     # Ensure world is initialized before loop
     init_grid_once()
     init_entities_once()
@@ -1963,6 +2106,32 @@ def run_game(screen: pygame.surface.Surface, qr_surface: pygame.surface.Surface)
                 running = False
             elif event.type == pygame.KEYDOWN and event.key in (pygame.K_ESCAPE, pygame.K_q):
                 running = False
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                try:
+                    mx, my = event.pos
+                    # Only consider clicks within sidebar area
+                    if 0 <= mx < SIDEBAR_WIDTH:
+                        for sid, btns in list(ui_bias_buttons.items()):
+                            up_r = btns.get('up')
+                            dn_r = btns.get('down')
+                            if up_r and up_r.collidepoint(mx, my):
+                                item_floor_bias_px += item_bias_step_px
+                                break
+                            if dn_r and dn_r.collidepoint(mx, my):
+                                item_floor_bias_px -= item_bias_step_px
+                                break
+                        # Scale bias buttons
+                        for sid, btns in list(ui_scale_buttons.items()):
+                            up_r = btns.get('up')
+                            dn_r = btns.get('down')
+                            if up_r and up_r.collidepoint(mx, my):
+                                item_scale_bias_mult = min(3.0, item_scale_bias_mult + item_scale_step)
+                                break
+                            if dn_r and dn_r.collidepoint(mx, my):
+                                item_scale_bias_mult = max(0.1, item_scale_bias_mult - item_scale_step)
+                                break
+                except Exception:
+                    pass
 
         # Background and layout
         screen.fill((0, 0, 0))
@@ -2480,9 +2649,64 @@ def run_game(screen: pygame.surface.Surface, qr_surface: pygame.surface.Surface)
             except Exception:
                 pass
 
-            # sidebar listing
+            # sidebar listing (name)
             name = pdata.get('name', 'Player')
             screen.blit(font.render(name, True, (200, 200, 200)), (20, list_y))
+            list_y += 22
+            # live bias + distance display and buttons per player
+            try:
+                # Find nearest pillar distance (in tiles)
+                cx, cy = player_state[sid]['cell']
+                nearest_dist = None
+                for ent in world_entities:
+                    try:
+                        if (ent.get('type') or 'item') != 'item':
+                            continue
+                        item_id = str(ent.get('item_id') or '')
+                        if not item_id.startswith('pillar_of_knowledge'):
+                            continue
+                        pos = ent.get('pos') or ent.get('position')
+                        if not pos or len(pos) < 2:
+                            continue
+                        ex, ey = float(pos[0]), float(pos[1])
+                        d = math.hypot(ex - float(cx), ey - float(cy))
+                        if (nearest_dist is None) or (d < nearest_dist):
+                            nearest_dist = d
+                    except Exception:
+                        continue
+                dist_txt = f"{nearest_dist:.1f}" if nearest_dist is not None else "-"
+            except Exception:
+                dist_txt = "-"
+
+            # Text line: bias and distance (keep concise)
+            info_text = f"bias: {int(item_floor_bias_px)}  dist: {dist_txt}"
+            screen.blit(font.render(info_text, True, (160, 160, 160)), (20, list_y))
+
+            # Up/Down small buttons for Y-bias, anchored within sidebar
+            BTN_W, SP, RIGHT_M = 22, 6, 14
+            btns_total = BTN_W * 2 + SP
+            btn_x0 = SIDEBAR_WIDTH - RIGHT_M - btns_total  # ensure fully inside 0..SIDEBAR_WIDTH
+            up_rect = pygame.Rect(btn_x0, list_y - 2, BTN_W, BTN_W)
+            dn_rect = pygame.Rect(btn_x0 + BTN_W + SP, list_y - 2, BTN_W, BTN_W)
+            pygame.draw.rect(screen, (60,60,60), up_rect)
+            pygame.draw.rect(screen, (60,60,60), dn_rect)
+            screen.blit(font.render('▲', True, (220, 220, 220)), (up_rect.x + 5, up_rect.y))
+            screen.blit(font.render('▼', True, (220, 220, 220)), (dn_rect.x + 5, dn_rect.y))
+            # Register rects for click detection
+            ui_bias_buttons[sid] = { 'up': up_rect, 'down': dn_rect }
+
+            # Up/Down small buttons for Scale bias (next row), also fully inside
+            list_y += 20
+            scale_lbl = f"Scale: {item_scale_bias_mult:.2f}"
+            screen.blit(font.render(scale_lbl, True, (140, 140, 140)), (20, list_y))
+            sup_rect = pygame.Rect(btn_x0, list_y - 2, BTN_W, BTN_W)
+            sdn_rect = pygame.Rect(btn_x0 + BTN_W + SP, list_y - 2, BTN_W, BTN_W)
+            pygame.draw.rect(screen, (60,60,60), sup_rect)
+            pygame.draw.rect(screen, (60,60,60), sdn_rect)
+            screen.blit(font.render('▲', True, (220, 220, 220)), (sup_rect.x + 5, sup_rect.y))
+            screen.blit(font.render('▼', True, (220, 220, 220)), (sdn_rect.x + 5, sdn_rect.y))
+            ui_scale_buttons[sid] = { 'up': sup_rect, 'down': sdn_rect }
+
             list_y += 28
 
         
@@ -2660,14 +2884,30 @@ def run_game(screen: pygame.surface.Surface, qr_surface: pygame.surface.Surface)
                 base = RC_H / max(1e-3, dist)
                 # Item/enemy sprite height; items rendered 50% smaller globally
                 type_str = (ent.get('type') or 'item')
+                # Distance-based tuning: per-item overrides or global defaults
+                try:
+                    tuning = (game_config.get_game_config() or {}).get('tuning') or {}
+                except Exception:
+                    tuning = {}
+                # Resolve per-item render curves via item definition if available
+                item_id = str(ent.get('item_id') or '')
+                itdef = ITEM_DB.get(item_id) or {}
+                rblock = (itdef.get('render') or {}) if isinstance(itdef.get('render'), dict) else {}
+                scale_curve = rblock.get('scale_curve') or tuning.get('item_scale_curve_default') or []
+                y_curve = rblock.get('y_bias_curve') or tuning.get('item_y_bias_curve_default') or []
+                # Sample curves at current distance
+                scale_mult_curve = _sample_curve(scale_curve, dist, default=1.0)
+                y_bias_curve = _sample_curve(y_curve, dist, default=0.0)
+
                 item_scale_mult = 0.5 if type_str == 'item' else 1.0
-                out_h = int(base * (base_h / 64.0) * scale * item_scale_mult)
+                # Apply live scale bias multiplier for items
+                out_h = int(base * (base_h / 64.0) * scale * item_scale_mult * float(scale_mult_curve) * float(item_scale_bias_mult))
                 out_h = max(1, min(3 * RC_H, out_h))
                 aspect = base_w / max(1, base_h)
                 out_w = int(out_h * aspect)
                 center_x = ray_x
                 x = center_x - out_w // 2
-                y = (RC_H - out_h) // 2 - y_off
+                y = (RC_H - out_h) // 2 - y_off - int(y_bias_curve)
                 # Anchor items to an empirical floor line that shifts with distance.
                 # This better matches the floor perspective in our renderer.
                 if type_str == 'item':
@@ -2676,8 +2916,11 @@ def run_game(screen: pygame.surface.Surface, qr_surface: pygame.surface.Surface)
                     # Close (dist~1): ~0.86H - 1px; Far (dist>=12): ~0.86H - 6px
                     floor_y = int((RC_H * 86) // 100)
                     floor_y -= int(min(6, 0.5 * max(0.0, dist)))
+                    # Apply live bias from tuning UI (positive lowers the sprite)
+                    floor_y += int(item_floor_bias_px)
                     # Place item so its bottom sits on this floor line
-                    y = floor_y - out_h - y_off
+                    # Add distance bias from curve as well
+                    y = floor_y - out_h - y_off - int(y_bias_curve)
 
                 # Sprite sheet or single image
                 if 'sheet' in spr:
@@ -2743,14 +2986,25 @@ def run_game(screen: pygame.surface.Surface, qr_surface: pygame.surface.Surface)
                 scale = 1.0
                 y_off = 0
 
+                # Distance-based tuning for enemies
+                try:
+                    tuning = (game_config.get_game_config() or {}).get('tuning') or {}
+                except Exception:
+                    tuning = {}
+                rblock = (info.get('render') or {}) if isinstance(info.get('render'), dict) else {}
+                e_scale_curve = rblock.get('scale_curve') or tuning.get('enemy_scale_curve_default') or []
+                e_y_curve = rblock.get('y_bias_curve') or tuning.get('enemy_y_bias_curve_default') or []
+                e_scale_mult = _sample_curve(e_scale_curve, dist, default=1.0)
+                e_y_bias = _sample_curve(e_y_curve, dist, default=0.0)
+
                 base = RC_H / max(1e-3, dist)
-                out_h = int(base * (base_h / 64.0) * scale)
+                out_h = int(base * (base_h / 64.0) * scale * float(e_scale_mult))
                 out_h = max(1, min(3 * RC_H, out_h))
                 aspect = base_w / max(1, base_h)
                 out_w = int(out_h * aspect)
                 center_x = ray_x
                 x = center_x - out_w // 2
-                y = (RC_H - out_h) // 2 - y_off
+                y = (RC_H - out_h) // 2 - y_off - int(e_y_bias)
 
                 sprites.append({
                     'img': f'items/{image}', 'sx': 0, 'sy': 0, 'sw': base_w, 'sh': base_h,
