@@ -19,5 +19,24 @@
     "damage_items": [
       "pickaxe_basic"
     ]
+  },
+  {
+    "type": "outer_wall",
+    "name": "Outer Boundary",
+    "image": "wall_outer.png",
+    "stats": {
+      "durability": 1000000000,
+      "damage": 0,
+      "strength": 0,
+      "attack": 0,
+      "defense": 999999,
+      "water_damage": 0,
+      "water_defense": 999999,
+      "fire_damage": 0,
+      "fire_defense": 999999,
+      "earth_damage": 0,
+      "earth_defense": 999999
+    },
+    "damage_items": []
   }
 ]

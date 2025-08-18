@@ -487,6 +487,32 @@ def init_grid_once():
     # Later we can vary by biome/region
     wall_hp = [[((_hp_max_for_type(default_type)) if grid[y][x] == WALL else 0) for x in range(GRID_W)] for y in range(GRID_H)]
     wall_type_id = [[(default_type if grid[y][x] == WALL else '') for x in range(GRID_W)] for y in range(GRID_H)]
+    # Override perimeter with indestructible outer wall type if available
+    outer_type = 'outer_wall' if 'outer_wall' in wt_map else None
+    if outer_type is not None:
+        outer_hp = _hp_max_for_type(outer_type)
+        # Top and bottom rows
+        y = 0
+        for x in range(GRID_W):
+            if grid[y][x] == WALL:
+                wall_type_id[y][x] = outer_type
+                wall_hp[y][x] = outer_hp
+        y = GRID_H - 1
+        for x in range(GRID_W):
+            if grid[y][x] == WALL:
+                wall_type_id[y][x] = outer_type
+                wall_hp[y][x] = outer_hp
+        # Left and right columns (excluding corners already set)
+        x = 0
+        for y in range(1, GRID_H - 1):
+            if grid[y][x] == WALL:
+                wall_type_id[y][x] = outer_type
+                wall_hp[y][x] = outer_hp
+        x = GRID_W - 1
+        for y in range(1, GRID_H - 1):
+            if grid[y][x] == WALL:
+                wall_type_id[y][x] = outer_type
+                wall_hp[y][x] = outer_hp
 
 def generate_biomes() -> List[List[int]]:
     """Create biome ids per tile (0..6). 0 = default. 1..6 = colored biomes.

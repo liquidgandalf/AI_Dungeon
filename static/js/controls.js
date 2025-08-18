@@ -606,6 +606,32 @@
     return img;
   }
 
+  // Floor texture pattern cache (by apparent cell size in px)
+  const floorPatCache = new Map(); // key: size -> CanvasPattern
+  const floorImg = getImage('tiles/stonefloor.png');
+  function getFloorPattern(size){
+    size = Math.max(4, size|0);
+    const key = size|0;
+    if (floorPatCache.has(key)) return floorPatCache.get(key);
+    // If image not ready yet, fall back to checker so we still render something
+    if (!floorImg || !floorImg.complete || !floorImg.naturalWidth){
+      return getCheckerPattern(size);
+    }
+    // Create a single-tile canvas of the requested apparent scale
+    const cnv = document.createElement('canvas');
+    cnv.width = key; cnv.height = key;
+    const c2 = cnv.getContext('2d');
+    // Keep pixel-art crisp
+    c2.imageSmoothingEnabled = false;
+    // Draw the whole source texture scaled to key x key so it tiles cleanly
+    try {
+      c2.drawImage(floorImg, 0, 0, floorImg.naturalWidth, floorImg.naturalHeight, 0, 0, key, key);
+    } catch(_){}
+    const pat = c2.createPattern(cnv, 'repeat');
+    floorPatCache.set(key, pat);
+    return pat;
+  }
+
   // Map item id to HUD icon path
   function itemIconPath(itemId){
     if (!itemId) return null;
@@ -728,6 +754,8 @@
 
   // Draw per-column frame data (heights and shades) onto canvas, then sprites
   let _lastSpriteLogTs = 0;
+  // Wall texture (stone)
+  const wallImg = getImage('tiles/stonewall.png');
   socket.on('frame', (data) => {
     if (!ctx || !data) return;
     const w = data.w|0, h = data.h|0;
@@ -820,11 +848,12 @@
     }
     const floorTop = (h/2)|0;
     ctx.fillRect(0, floorTop, w, h - floorTop);
-    // Faux texture overlay: banded perspective checker with multiply blending
+    // Textured floor: banded perspective tiling using stonefloor.png
     const bands = 9;
     ctx.save();
+    ctx.imageSmoothingEnabled = false;
     ctx.globalCompositeOperation = 'multiply';
-    ctx.globalAlpha = 0.55;
+    ctx.globalAlpha = 0.85;
     for (let i=0;i<bands;i++){
       const t0 = i / bands;
       const t1 = (i+1) / bands;
@@ -832,38 +861,66 @@
       const y1 = (floorTop + Math.floor((h - floorTop) * t1))|0;
       const bandH = Math.max(1, y1 - y0);
       // Smaller pattern near horizon, larger near bottom to fake perspective
-      const scale = 4 + Math.floor(t1 * 28); // ~4..32 px (bigger cells -> more visible)
-      const pat = getCheckerPattern(scale);
+      const scale = 8 + Math.floor(t1 * 40); // ~8..48 px
+      const pat = getFloorPattern(scale);
       ctx.fillStyle = pat;
       ctx.fillRect(0, y0, w, bandH);
     }
     // Add a vertical darkening gradient for depth
     const g = ctx.createLinearGradient(0, floorTop, 0, h);
     g.addColorStop(0.0, 'rgba(0,0,0,0.00)');
-    g.addColorStop(1.0, 'rgba(0,0,0,0.25)');
+    g.addColorStop(1.0, 'rgba(0,0,0,0.35)');
     ctx.fillStyle = g;
     ctx.fillRect(0, floorTop, w, h - floorTop);
     ctx.restore();
+    // Texture-map walls per screen column
+    ctx.imageSmoothingEnabled = false;
+    const texReady = wallImg && wallImg.complete && wallImg.naturalWidth;
+    const texW = texReady ? wallImg.naturalWidth : 0;
+    const texH = texReady ? wallImg.naturalHeight : 0;
     for (let x = 0; x < w; x++) {
       const colH = heights[x] | 0;
+      if (colH <= 0) continue;
       const shade = shades[x] | 0;
       const y0 = ((h - colH) / 2) | 0;
-      // Biome-tinted wall color
+      // Biome tint target color
       const bid = (data.biome|0) || 0;
       const [tr,tg,tb] = tintFromBiome(bid);
-      const k = 0.42; // blend amount
+      const k = 0.35; // slightly lower blend so texture shows more
       const r = mix(shade, tr, k), g = mix(shade, tg, k), b = mix(shade, tb, k);
-      ctx.fillStyle = `rgb(${r},${g},${b})`;
-      ctx.fillRect(x, y0, 1, colH);
-      // Overlay simple pattern for material feel
-      const ov = overlayPatternForBiome(bid, colH);
-      if (ov && colH > 0){
+      if (texReady){
+        // Sample 1px vertical slice repeating across screen
+        const sx = (x % texW);
+        try {
+          ctx.drawImage(wallImg, sx, 0, 1, texH, x, y0, 1, colH);
+        } catch(_) {
+          // fallback to flat fill on draw error
+          ctx.fillStyle = `rgb(${r},${g},${b})`;
+          ctx.fillRect(x, y0, 1, colH);
+        }
+        // Multiply-tint by biome/shade color
         ctx.save();
         ctx.globalCompositeOperation = 'multiply';
-        ctx.globalAlpha = ov.alpha;
-        ctx.fillStyle = ov.pat;
+        ctx.globalAlpha = 0.6;
+        ctx.fillStyle = `rgb(${r},${g},${b})`;
         ctx.fillRect(x, y0, 1, colH);
         ctx.restore();
+      } else {
+        // Texture not ready: use previous solid fill
+        ctx.fillStyle = `rgb(${r},${g},${b})`;
+        ctx.fillRect(x, y0, 1, colH);
+      }
+      // Overlay simple pattern for material feel only when texture not ready
+      if (!texReady){
+        const ov = overlayPatternForBiome(bid, colH);
+        if (ov && colH > 0){
+          ctx.save();
+          ctx.globalCompositeOperation = 'multiply';
+          ctx.globalAlpha = ov.alpha;
+          ctx.fillStyle = ov.pat;
+          ctx.fillRect(x, y0, 1, colH);
+          ctx.restore();
+        }
       }
     }
 
