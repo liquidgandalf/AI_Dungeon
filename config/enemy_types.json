@@ -21,7 +21,14 @@
       "fire_defense": 0,
       "earth_damage": 5,
       "earth_defense": 15
-    }
+    },
+    "attack_range": 1,
+    "ranged_attack": 0,
+    "description_core": "A placid gel that learns the maze by touch and taste, leaving faint dew where it drifts.",
+    "description_seeks": "Whispers suggest it is drawn toward {WANTS_ITEM}, as if the object sings to its surface.",
+    "description_fears": "It quivers from {HATES_ITEM}, losing cohesion around its edge.",
+    "description_vulnerable": "When brushed with {VULNERABLE_ITEM}, the gel slackens and falls still.",
+    "backstory": "Born of shed condensation and echoed footfalls, the green slime remembers only cool stone and quiet hunger."
   },
   {
     "type": "slime_blue",
@@ -45,7 +52,14 @@
       "fire_defense": 0,
       "earth_damage": 3,
       "earth_defense": 10
-    }
+    },
+    "attack_range": 1,
+    "ranged_attack": 0,
+    "description_core": "A cool, lucid slime that shimmers with trapped reflections from unseen pools.",
+    "description_seeks": "Its surface dimples toward {WANTS_ITEM}, following a pull like tide to moon.",
+    "description_fears": "It clouds at the presence of {HATES_ITEM}, edges frosting to stillness.",
+    "description_vulnerable": "Under {VULNERABLE_ITEM}, its clarity fractures and drains away.",
+    "backstory": "When the Labyrinth sighed, its vapors beaded into curious minds that forgot they were water."
   },
   {
     "type": "slime_red",
@@ -69,7 +83,14 @@
       "fire_defense": 10,
       "earth_damage": 4,
       "earth_defense": 8
-    }
+    },
+    "attack_range": 1,
+    "ranged_attack": 0,
+    "description_core": "A fervid clot of embered gel that smolders where it rolls.",
+    "description_seeks": "It crawls toward {WANTS_ITEM}, sparks ticking in its wake.",
+    "description_fears": "A guttering hush overtakes it near {HATES_ITEM}.",
+    "description_vulnerable": "A touch of {VULNERABLE_ITEM} unknots its heat and leaves only damp soot.",
+    "backstory": "Kindled by stray offerings and unkept oaths, it keeps a tiny altar of cinders within."
   }
 ,
   {
@@ -98,7 +119,14 @@
       "fire_defense": 20,
       "earth_damage": 10,
       "earth_defense": 30
-    }
+    },
+    "attack_range": 3,
+    "ranged_attack": 30,
+    "description_core": "A queen drowned yet unbowed, moving as if the corridors themselves were a tide.",
+    "description_seeks": "A vow half-remembered draws her toward {WANTS_ITEM}.",
+    "description_fears": "The current falters when {HATES_ITEM} is near, her gaze turning away like ebbing surf.",
+    "description_vulnerable": "When touched by {VULNERABLE_ITEM}, the water stills and the crown grows heavy.",
+    "backstory": "Stories speak of a ruler bound to the Labyrinth by a promise beneath dark water; the bond tugs still, gentle and relentless."
   },
   {
     "type": "boss_water_kravenor",
@@ -126,7 +154,14 @@
       "fire_defense": 25,
       "earth_damage": 12,
       "earth_defense": 35
-    }
+    },
+    "attack_range": 3,
+    "ranged_attack": 30,
+    "description_core": "A leviathan unmoored, each motion a swell that shrinks the halls around him.",
+    "description_seeks": "He listens for {WANTS_ITEM}, as if for a lighthouse through fog.",
+    "description_fears": "He veers from {HATES_ITEM}, depths shivering in quiet warning.",
+    "description_vulnerable": "When met by {VULNERABLE_ITEM}, the vastness folds into a single, breakable wave.",
+    "backstory": "Mariners whisper of a promise made in a storm and a name kept safe beneath the breakers; the Labyrinth never lets such promises rest."
   },
   {
     "type": "super_water_leviathra",
@@ -154,7 +189,14 @@
       "fire_defense": 30,
       "earth_damage": 15,
       "earth_defense": 40
-    }
+    },
+    "attack_range": 4,
+    "ranged_attack": 40,
+    "description_core": "An abyssal sovereign rumored only in undertow and driftwood omens.",
+    "description_seeks": "Currents converge wherever {WANTS_ITEM} is carried.",
+    "description_fears": "A hush falls over the deep at the sign of {HATES_ITEM}.",
+    "description_vulnerable": "With {VULNERABLE_ITEM}, even the sea remembers how to part.",
+    "backstory": "Sages sketch a crown made of waves and say the Labyrinth keeps its greatest names in the dark until the tide is right."
   },
   {
     "type": "boss_earth_gravemaw",
@@ -182,7 +224,14 @@
       "water_defense": 20,
       "fire_damage": 10,
       "fire_defense": 30
-    }
+    },
+    "attack_range": 3,
+    "ranged_attack": 20,
+    "description_core": "A moving barrow of stone, voice like gravel rolling down a ravine.",
+    "description_seeks": "The long memory of rock leans toward {WANTS_ITEM}.",
+    "description_fears": "Its crust balks at {HATES_ITEM}, seams tightening to keep the echo out.",
+    "description_vulnerable": "A mark of {VULNERABLE_ITEM} finds the fracture and gentles the mass.",
+    "backstory": "Some say two hearts once shared a path beneath the hills; the Labyrinth taught the hills to keep them."
   },
   {
     "type": "boss_earth_veythra",
@@ -210,7 +259,14 @@
       "water_defense": 20,
       "fire_damage": 10,
       "fire_defense": 30
-    }
+    },
+    "attack_range": 3,
+    "ranged_attack": 20,
+    "description_core": "A rootbound sovereign whose touch teaches stone how to rot.",
+    "description_seeks": "She slows whenever {WANTS_ITEM} is near, as if hearing a voice through soil.",
+    "description_fears": "She turns from {HATES_ITEM}, rings tightening like a tree in winter.",
+    "description_vulnerable": "With {VULNERABLE_ITEM}, the blight loosens and the bark remembers spring.",
+    "backstory": "The Labyrinth keeps love letters as rings in old wood; some are easy to count, some are not."
   },
   {
     "type": "super_earth_sylthrak",
@@ -238,7 +294,14 @@
       "water_defense": 30,
       "fire_damage": 15,
       "fire_defense": 40
-    }
+    },
+    "attack_range": 4,
+    "ranged_attack": 30,
+    "description_core": "A ruin given legs, trailing dust that smells like rain and endings.",
+    "description_seeks": "Monoliths tilt toward {WANTS_ITEM} the way flowers tilt to sun.",
+    "description_fears": "Fault lines draw away from {HATES_ITEM}.",
+    "description_vulnerable": "A sign of {VULNERABLE_ITEM} is a chisel through centuries.",
+    "backstory": "Old sayings speak of titans that rise when vows are buried too deep; the Labyrinth remembers where."
   },
   {
     "type": "boss_fire_pyrrhion",
@@ -266,7 +329,14 @@
       "water_defense": 10,
       "earth_damage": 10,
       "earth_defense": 20
-    }
+    },
+    "attack_range": 3,
+    "ranged_attack": 60,
+    "description_core": "A cinderlord whose laughter drafts heat into every corridor.",
+    "description_seeks": "Cinders brighten when {WANTS_ITEM} is near, as if catching a spark.",
+    "description_fears": "His flame gutters at the sign of {HATES_ITEM}.",
+    "description_vulnerable": "With {VULNERABLE_ITEM}, ash remembers how to be earth.",
+    "backstory": "Legends claim the maze bottles wildfires as test and tinder; some carry the lesson longer than the flame."
   },
   {
     "type": "boss_fire_ignivrax",
@@ -294,7 +364,14 @@
       "water_defense": 10,
       "earth_damage": 10,
       "earth_defense": 20
-    }
+    },
+    "attack_range": 3,
+    "ranged_attack": 60,
+    "description_core": "A phoenix bound to corridors, wings beating drafts that taste of new charcoal.",
+    "description_seeks": "She circles when {WANTS_ITEM} glows nearby, talons stoking sparks.",
+    "description_fears": "She keeps to high thermals away from {HATES_ITEM}.",
+    "description_vulnerable": "A stroke of {VULNERABLE_ITEM} cools the air and weighs the feathers.",
+    "backstory": "Some flames guard doorways between endings and startings; the Labyrinth names such doorways and forgets to open them."
   },
   {
     "type": "super_fire_cindralok",
@@ -322,7 +399,14 @@
       "water_defense": 10,
       "earth_damage": 15,
       "earth_defense": 30
-    }
+    },
+    "attack_range": 4,
+    "ranged_attack": 70,
+    "description_core": "Ash reborn into a stride, footfalls that leave warm sigils on stone.",
+    "description_seeks": "Where {WANTS_ITEM} smolders, his steps grow eager.",
+    "description_fears": "He banks his heat from {HATES_ITEM}.",
+    "description_vulnerable": "With {VULNERABLE_ITEM}, the ember inside flickers and listens.",
+    "backstory": "Old tales say some names are kindling; the Labyrinth keeps such names dry, waiting."
   },
   {
     "type": "super_fire_ignivrax",
@@ -350,6 +434,13 @@
       "water_defense": 10,
       "earth_damage": 15,
       "earth_defense": 30
-    }
+    },
+    "attack_range": 4,
+    "ranged_attack": 70,
+    "description_core": "A phoenix writ larger than rumor, shadow feathered with sparks.",
+    "description_seeks": "Thermals rise wherever {WANTS_ITEM} is held.",
+    "description_fears": "She wheels wide of {HATES_ITEM}.",
+    "description_vulnerable": "A sign of {VULNERABLE_ITEM} settles the sky and cools the wind.",
+    "backstory": "When the maze keeps a flame too long, it grows its own horizon; travelers swear they see it move."
   }
 ]

@@ -9,7 +9,10 @@
       "weight": 1.0,
       "durability": 100,
       "capacity_weight": 15.0
-    }
+    },
+    "ranged_attack": 0,
+    "description_core": "A worn canvas pack with quiet seams and room for one more hope.",
+    "backstory": "Travelers stitch their names inside its lining; the Labyrinth remembers every thread."
   },
   {
     "id": "sword_basic",
@@ -25,7 +28,10 @@
       "water_damage": 0,
       "fire_damage": 0,
       "earth_damage": 0
-    }
+    },
+    "ranged_attack": 0,
+    "description_core": "A dependable edge that carries more resolve than shine.",
+    "backstory": "Hammered from common ore and uncommon patience; it prefers problems it can reach."
   },
   {
     "id": "shield_wood",
@@ -39,7 +45,10 @@
       "defense": 4,
       "durability": 60,
       "earth_defense": 2
-    }
+    },
+    "ranged_attack": 0,
+    "description_core": "Knot-grained planks bound by iron, steady as a kept promise.",
+    "backstory": "It bears dents like old stories—each one a corner turned and survived."
   },
   {
     "id": "helmet_leather",
@@ -51,7 +60,10 @@
       "weight": 1.0,
       "defense": 1,
       "durability": 50
-    }
+    },
+    "ranged_attack": 0,
+    "description_core": "Supple hide trimmed to keep thought and rain in their places.",
+    "backstory": "Sweat-darkened and luck-touched, it remembers every narrow miss."
   },
   {
     "id": "boots_leather",
@@ -63,7 +75,10 @@
       "weight": 1.2,
       "defense": 1,
       "durability": 50
-    }
+    },
+    "ranged_attack": 0,
+    "description_core": "Quiet steps stitched for long halls and longer chances.",
+    "backstory": "Their soles carry a map in scuffs; the Labyrinth reads it back."
   },
   {
     "id": "armor_cloth",
@@ -75,7 +90,10 @@
       "weight": 2.0,
       "defense": 2,
       "durability": 70
-    }
+    },
+    "ranged_attack": 0,
+    "description_core": "Layered weave that turns blows into rumors.",
+    "backstory": "Patched with care and a little superstition; it wears lighter than fear."
   },
   {
     "id": "pickaxe_basic",
@@ -89,7 +107,10 @@
       "attack": 2,
       "durability": 100,
       "wall_damage": 50
-    }
+    },
+    "ranged_attack": 0,
+    "description_core": "A miner's rhythm given teeth; walls hear it coming.",
+    "backstory": "Swings to the beat of stubbornness; some stones take it personally."
   },
   {
     "id": "demon_spawn",
@@ -97,7 +118,10 @@
     "allowed_slots": [],
     "active": 1,
     "spawn_type": "slime_green",
-    "stats": {}
+    "stats": {},
+    "ranged_attack": 0,
+    "description_core": "An unsettled hinge between here and elsewhere.",
+    "backstory": "It remembers the shape of visitors and tries to be polite about it."
   },
   {
     "id": "chest_basic",
@@ -116,7 +140,10 @@
       { "item": "boots_leather", "weight": 12, "min": 1, "max": 1 },
       { "item": "armor_cloth", "weight": 8, "min": 1, "max": 1 }
     ],
-    "stats": {}
+    "stats": {},
+    "ranged_attack": 0,
+    "description_core": "A promise with a lid and a reputation for splinters.",
+    "backstory": "Hinges creak like old advice; what's inside usually ignores it."
   },
   {
     "id": "obsidian_ritual_dagger",
@@ -126,7 +153,9 @@
     "spawn_type": null,
     "icon": "items/Obsidian Ritual Dagger.png",
     "special": true,
-    "stats": { "weight": 6.0, "durability": 100 }
+    "stats": { "weight": 6.0, "durability": 100 },
+    "description_core": "A night-slick edge that drinks lamplight and rumor alike.",
+    "backstory": "Cut a doorway thin enough and something will try to read it." 
   },
   {
     "id": "infernal_grimoire",
@@ -136,7 +165,9 @@
     "spawn_type": null,
     "icon": "items/Infernal Grimoire.png",
     "special": true,
-    "stats": { "weight": 7.5, "durability": 100 }
+    "stats": { "weight": 7.5, "durability": 100 },
+    "description_core": "Pages that warm the air as you turn them.",
+    "backstory": "Margins argue with the text; both are convinced they're right." 
   },
   {
     "id": "cursed_skull_idol",
@@ -146,7 +177,9 @@
     "spawn_type": null,
     "icon": "items/Cursed Skull Idol.png",
     "special": true,
-    "stats": { "weight": 6.5, "durability": 100 }
+    "stats": { "weight": 6.5, "durability": 100 },
+    "description_core": "A grin that fits too many doors.",
+    "backstory": "When it listens, rooms go quiet to hear what it heard."
   },
   {
     "id": "ashen_pentacle",
@@ -156,7 +189,9 @@
     "spawn_type": null,
     "icon": "items/Ashen Pentacle.png",
     "special": true,
-    "stats": { "weight": 5.5, "durability": 100 }
+    "stats": { "weight": 5.5, "durability": 100 },
+    "description_core": "Char meets charm in a soot-black star.",
+    "backstory": "It remembers the shape of smoke and asks every flame its name."
   },
   {
     "id": "horn_of_the_abyss",
@@ -166,7 +201,9 @@
     "spawn_type": null,
     "icon": "items/Horn of the Abyss.png",
     "special": true,
-    "stats": { "weight": 6.0, "durability": 100 }
+    "stats": { "weight": 6.0, "durability": 100 },
+    "description_core": "A call that arrives before it's sounded.",
+    "backstory": "Blow it in a maze and every corner answers at once."
   },
   {
     "id": "hellfire_candle",
@@ -176,7 +213,9 @@
     "spawn_type": null,
     "icon": "items/Hellfire Candle.png",
     "special": true,
-    "stats": { "weight": 5.0, "durability": 100 }
+    "stats": { "weight": 5.0, "durability": 100 },
+    "description_core": "A flame that looks back.",
+    "backstory": "Drips write small letters that no one admits to reading."
   },
   {
     "id": "bloodstone_amulet",
@@ -186,7 +225,9 @@
     "spawn_type": null,
     "icon": "items/Bloodstone Amulet.png",
     "special": true,
-    "stats": { "weight": 5.5, "durability": 100 }
+    "stats": { "weight": 5.5, "durability": 100 },
+    "description_core": "A pulse caught in red glass.",
+    "backstory": "It keeps time for promises that ran late."
   },
   {
     "id": "bone_chalice_of_the_damned",
@@ -196,7 +237,9 @@
     "spawn_type": null,
     "icon": "items/Bone Chalice of the Damned.png",
     "special": true,
-    "stats": { "weight": 7.0, "durability": 100 }
+    "stats": { "weight": 7.0, "durability": 100 },
+    "description_core": "A toast that never finishes.",
+    "backstory": "It chills anything poured, even sunlight."
   },
   {
     "id": "sword_of_saint_aurelius",
@@ -206,7 +249,9 @@
     "spawn_type": null,
     "icon": "items/Sword of Saint Aurelius.png",
     "special": true,
-    "stats": { "weight": 8.5, "durability": 100 }
+    "stats": { "weight": 8.5, "durability": 100 },
+    "description_core": "An oath turned into an edge.",
+    "backstory": "It prefers to be raised for others, not against them."
   },
   {
     "id": "hammer_of_purity",
@@ -216,7 +261,9 @@
     "spawn_type": null,
     "icon": "items/Hammer of Purity.png",
     "special": true,
-    "stats": { "weight": 9.0, "durability": 100 }
+    "stats": { "weight": 9.0, "durability": 100 },
+    "description_core": "A verdict with a handle.",
+    "backstory": "It strikes like a bell; not everyone hears the same note."
   },
   {
     "id": "runed_war_axe",
@@ -226,7 +273,9 @@
     "spawn_type": null,
     "icon": "items/Runed War Axe.png",
     "special": true,
-    "stats": { "weight": 9.5, "durability": 100 }
+    "stats": { "weight": 9.5, "durability": 100 },
+    "description_core": "Edges that argue in a script of sparks.",
+    "backstory": "Every notch is a word in a language that prefers action."
   },
   {
     "id": "demonbane_cross",
@@ -236,7 +285,9 @@
     "spawn_type": null,
     "icon": "items/Demonbane Cross.png",
     "special": true,
-    "stats": { "weight": 6.0, "durability": 100 }
+    "stats": { "weight": 6.0, "durability": 100 },
+    "description_core": "A quiet light that goes where it's needed first.",
+    "backstory": "It travels well between rooms no one can see."
   },
   {
     "id": "blessed_salt_crystals",
@@ -246,7 +297,9 @@
     "spawn_type": null,
     "icon": "items/Blessed Salt Crystals.png",
     "special": true,
-    "stats": { "weight": 5.0, "durability": 100 }
+    "stats": { "weight": 5.0, "durability": 100 },
+    "description_core": "Grains that teach thresholds how to behave.",
+    "backstory": "They remember shorelines and insist on them."
   },
   {
     "id": "black_lotus_incense",
@@ -256,7 +309,9 @@
     "spawn_type": null,
     "icon": "items/Black Lotus Incense.png",
     "special": true,
-    "stats": { "weight": 5.5, "durability": 100 }
+    "stats": { "weight": 5.5, "durability": 100 },
+    "description_core": "Smoke that remembers where it has been.",
+    "backstory": "Some thoughts are easier to find when the air thinks with you."
   },
   {
     "id": "chains_of_servitude",
@@ -266,7 +321,9 @@
     "spawn_type": null,
     "icon": "items/Chains of Servitude.png",
     "special": true,
-    "stats": { "weight": 8.0, "durability": 100 }
+    "stats": { "weight": 8.0, "durability": 100 },
+    "description_core": "Links that remember who carried them last.",
+    "backstory": "They cling to vows, even the ones no one meant to make."
   },
   {
     "id": "mirror_of_vanity",
@@ -276,7 +333,9 @@
     "spawn_type": null,
     "icon": "items/Mirror of Vanity.png",
     "special": true,
-    "stats": { "weight": 6.0, "durability": 100 }
+    "stats": { "weight": 6.0, "durability": 100 },
+    "description_core": "A reflection that edits back.",
+    "backstory": "It shows what the room wants from you—if you let it."
   },
   {
     "id": "crown_of_bones",
@@ -286,7 +345,9 @@
     "spawn_type": null,
     "icon": "items/Crown of Bones.png",
     "special": true,
-    "stats": { "weight": 7.0, "durability": 100 }
+    "stats": { "weight": 7.0, "durability": 100 },
+    "description_core": "Teeth set in a circle the head eventually understands.",
+    "backstory": "It fits by teaching you why it should."
   },
   {
     "id": "chalice_of_eternal_wine",
@@ -296,6 +357,8 @@
     "spawn_type": null,
     "icon": "items/Chalice of Eternal Wine.png",
     "special": true,
-    "stats": { "weight": 6.5, "durability": 100 }
+    "stats": { "weight": 6.5, "durability": 100 },
+    "description_core": "A cup that keeps the night topped off.",
+    "backstory": "Toast once and the moment keeps refilling itself."
   }
 ]

@@ -42,6 +42,29 @@ def _get_enemy_sprite(etype: str, info: Dict[str, Any]) -> Tuple['pygame.Surface
     return (surf, w, h)
 
 
+# Cache natural image sizes to avoid reloading every frame
+_IMAGE_SIZE_CACHE = {}
+
+def _get_image_natural_size(img_name: str):
+    """Return (w, h) read from the PNG at static/img/items/<img_name>.
+    Falls back to (64,64) on error. Results are cached.
+    """
+    try:
+        path = _resolve_enemy_image_file(img_name)
+    except Exception:
+        return (64, 64)
+    wh = _IMAGE_SIZE_CACHE.get(path)
+    if wh:
+        return wh
+    try:
+        img = pygame.image.load(path)
+        wh = (int(img.get_width()), int(img.get_height()))
+    except Exception:
+        wh = (64, 64)
+    _IMAGE_SIZE_CACHE[path] = wh
+    return wh
+
+
 def _get_item_icon(icon_name: str, w: int = 16, h: int = 16) -> 'pygame.Surface':
     key = (icon_name, w, h)
     surf = _ITEM_ICON_CACHE.get(key)
@@ -1912,8 +1935,8 @@ def run_game(screen: pygame.surface.Surface, qr_surface: pygame.surface.Surface)
                 image = info.get('image')
                 if not image:
                     continue
-                base_w = 64
-                base_h = 64
+                # Use the actual PNG intrinsic size so slicing uses the full sprite
+                base_w, base_h = _get_image_natural_size(image)
                 scale = 1.0
                 y_off = 0
 
