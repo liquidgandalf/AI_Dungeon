@@ -92,7 +92,7 @@ import pygame
 from typing import Dict, Tuple, List, Any
 from app.server import players, socketio
 from app import config as game_config
-from app.items import ITEM_DB, get_weight, backpack_capacity
+from app.items import ITEM_DB, get_weight, backpack_capacity, register_item, get_item
 from app import enemy_ai
 
 # Screen and board
@@ -137,6 +137,11 @@ WALL_HP_PER_BIOME: int = 1
 # World entities loaded from config (items, enemies)
 world_entities: List[Dict[str, Any]] = []
 entities_inited = False
+# Generated knowledge scrolls distribution queue
+SCROLL_QUEUE: List[str] = []
+SCROLLS_GENERATED: bool = False
+# World log flag
+WORLD_LOG_WRITTEN: bool = False
 # Cells blocked by solid entities (e.g., items/props/spawners)
 solid_cells: set = set()
 
@@ -874,14 +879,359 @@ def _attach_container_contents(ent: Dict[str, Any]) -> None:
             return
         # Already has contents -> keep as-is
         if ent.get('container') and isinstance(ent.get('contents'), list):
+            # Also try to add a pending scroll if available
+            if SCROLL_QUEUE:
+                ent['contents'].append({'item': SCROLL_QUEUE.pop(0), 'qty': 1})
             return
         it = ITEM_DB.get(item_id) or {}
         if not it or not it.get('container'):
             return
         ent['container'] = True
         ent['contents'] = _roll_container_contents(item_id)
+        # Attach one pending scroll if available
+        if SCROLL_QUEUE:
+            ent['contents'].append({'item': SCROLL_QUEUE.pop(0), 'qty': 1})
     except Exception:
         return
+
+
+def ensure_scrolls_generated_once() -> None:
+    """Generate one 'Scroll of Knowledge' per relevant enemy type with known affinities,
+    register them as items, and distribute into existing chests. Future chests will
+    pull from SCROLL_QUEUE via _attach_container_contents()."""
+    global SCROLLS_GENERATED
+    if SCROLLS_GENERATED:
+        return
+    # Build enemy type map for names/texts
+    types = get_enemy_type_map()
+    if not enemies:
+        SCROLLS_GENERATED = True
+        return
+    # Helper to substitute placeholders
+    def _substitute(desc: str, it_name: str) -> str:
+        d = str(desc or '')
+        d = d.replace('{WANTS_ITEM}', it_name)
+        d = d.replace('{HATES_ITEM}', it_name)
+        d = d.replace('{VULNERABLE_ITEM}', it_name)
+        return d
+    made_ids: set = set()
+    for eid, inst in list(enemies.items()):
+        try:
+            etype = str(inst.get('type') or '')
+            if not etype or etype in made_ids:
+                continue
+            tdef = types.get(etype) or {}
+            # Require some textual descriptors
+            d_core = tdef.get('description_core')
+            d_seeks = tdef.get('description_seeks')
+            d_fears = tdef.get('description_fears')
+            d_vuln = tdef.get('description_vulnerable')
+            if not d_core:
+                continue
+            affin = inst.get('affinities') or {}
+            # Choose one info type where affinity exists
+            choice = None
+            it_id = None
+            if affin.get('desire') and d_seeks:
+                choice = 'seeks'
+                it_id = str(affin.get('desire'))
+            elif affin.get('fear') and d_fears:
+                choice = 'fears'
+                it_id = str(affin.get('fear'))
+            elif affin.get('vulnerable') and d_vuln:
+                choice = 'vulnerable'
+                it_id = str(affin.get('vulnerable'))
+            if not choice or not it_id:
+                continue
+            it_info = get_item(it_id) or {}
+            it_name = str(it_info.get('name') or it_id)
+            # Build final text
+            if choice == 'seeks':
+                info_text = _substitute(d_seeks, it_name)
+            elif choice == 'fears':
+                info_text = _substitute(d_fears, it_name)
+            else:
+                info_text = _substitute(d_vuln, it_name)
+            enemy_name = str(tdef.get('name') or etype)
+            scroll_id = f"scroll_{etype}_{choice}"
+            # Register if not present
+            if not ITEM_DB.get(scroll_id):
+                register_item({
+                    'id': scroll_id,
+                    'name': f"Scroll of Knowledge: {enemy_name}",
+                    'allowed_slots': [],  # carry-only
+                    'active': True,
+                    'icon': 'items/Scroll of Knowledge.png',
+                    'stats': { 'weight': 0.2, 'durability': 1 },
+                    'special': True,
+                })
+                # Store derived texts on the entity for UI via description_core
+                ITEM_DB[scroll_id]['description_core'] = f"{str(d_core)}\n\n{info_text}"
+            SCROLL_QUEUE.append(scroll_id)
+            made_ids.add(etype)
+        except Exception:
+            continue
+    # Distribute into existing chests now
+    for ent in world_entities:
+        try:
+            if (ent.get('type') or 'item') != 'item':
+                continue
+            if not str(ent.get('item_id') or '').startswith('chest_') and str(ent.get('item_id') or '') != 'chest_basic':
+                continue
+            _attach_container_contents(ent)
+            if not SCROLL_QUEUE:
+                break
+        except Exception:
+            continue
+    SCROLLS_GENERATED = True
+
+
+def write_world_log_once() -> None:
+    """Write a timestamped world log under /logs/ once per run after init.
+    Includes:
+    - All enemies with: type/name, coords, affinities, filled descriptions, and held items if present
+    - All chests with: coords and contents; for scrolls, include final description text
+    """
+    global WORLD_LOG_WRITTEN
+    if WORLD_LOG_WRITTEN:
+        return
+    try:
+        # Resolve base dir (project root) and logs dir
+        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+        logs_dir = os.path.join(base_dir, 'logs')
+        os.makedirs(logs_dir, exist_ok=True)
+        ts = time.strftime('%d_%m_%y_%H %M %S', time.localtime())
+        fname = f"world_{ts} .log"
+        fpath = os.path.join(logs_dir, fname)
+
+        # Helper: stringify affinities
+        def fmt_aff(aff):
+            if not isinstance(aff, dict):
+                return '{}'
+            return {
+                'fear': aff.get('fear'),
+                'desire': aff.get('desire'),
+                'vulnerable': aff.get('vulnerable'),
+            }
+
+        # Helper: fill descriptions for an enemy instance/type
+        types = get_enemy_type_map()
+        def fill_desc(inst: Dict[str, Any]) -> Dict[str, str]:
+            etype = str(inst.get('type') or '')
+            tdef = types.get(etype) or {}
+            d_core = str(tdef.get('description_core') or '')
+            d_seeks = str(tdef.get('description_seeks') or '')
+            d_fears = str(tdef.get('description_fears') or '')
+            d_vuln = str(tdef.get('description_vulnerable') or '')
+            affin = inst.get('affinities') or {}
+            # Resolve item names from ITEM_DB
+            def iname(item_id: Any) -> str:
+                iid = str(item_id) if item_id is not None else ''
+                it = ITEM_DB.get(iid) or {}
+                nm = it.get('name') or iid
+                return str(nm)
+            seeks_item = iname(affin.get('desire')) if affin.get('desire') else ''
+            fears_item = iname(affin.get('fear')) if affin.get('fear') else ''
+            vuln_item = iname(affin.get('vulnerable')) if affin.get('vulnerable') else ''
+            def sub(txt: str) -> str:
+                return (txt
+                    .replace('{WANTS_ITEM}', seeks_item)
+                    .replace('{HATES_ITEM}', fears_item)
+                    .replace('{VULNERABLE_ITEM}', vuln_item))
+            return {
+                'description_core': d_core,
+                'description_seeks': sub(d_seeks) if d_seeks else '',
+                'description_fears': sub(d_fears) if d_fears else '',
+                'description_vulnerable': sub(d_vuln) if d_vuln else '',
+                'backstory': str(tdef.get('backstory') or ''),
+            }
+
+        # Collect lines
+        lines: List[str] = []
+        lines.append('=== WORLD LOG ===')
+        lines.append(f"generated_at: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())}")
+        # Meta: map seed (none tracked), counts, player start cells if known
+        # Seed not currently tracked anywhere
+        lines.append('meta:')
+        lines.append('  map_seed: null')
+        # Counts
+        enemy_count = len(enemies or {})
+        # Classify entities to count chests/containers/items
+        chest_count = 0
+        other_container_count = 0
+        ground_item_count = 0
+        for ent in world_entities:
+            try:
+                if (ent.get('type') or 'item') != 'item':
+                    continue
+                iid = str(ent.get('item_id') or '')
+                if not iid:
+                    continue
+                itdef = ITEM_DB.get(iid) or {}
+                is_container = bool(itdef.get('container'))
+                # chest detection: id startswith chest_, or name contains 'chest', or sprite image contains 'chest'
+                nm = str(itdef.get('name') or iid).lower()
+                spr = (ent.get('sprite') or {}).get('image') or ''
+                is_chest = iid.startswith('chest_') or ('chest' in nm) or ('chest' in str(spr).lower()) or (iid == 'chest_basic')
+                if is_container and is_chest:
+                    chest_count += 1
+                elif is_container:
+                    other_container_count += 1
+                else:
+                    # treat as ground item if allowed_slots and not container
+                    if itdef.get('allowed_slots'):
+                        ground_item_count += 1
+            except Exception:
+                continue
+        lines.append(f"  counts: {{ enemies: {enemy_count}, chests: {chest_count}, containers: {other_container_count}, ground_items: {ground_item_count} }}")
+        # Player starts
+        try:
+            if player_state:
+                lines.append('  players:')
+                for sid, st in player_state.items():
+                    cell = st.get('cell') if isinstance(st, dict) else None
+                    if isinstance(cell, (list, tuple)) and len(cell) == 2:
+                        cx, cy = int(cell[0]), int(cell[1])
+                        lines.append(f"    - sid: {sid}, start_cell: [{cx}, {cy}]")
+                    else:
+                        lines.append(f"    - sid: {sid}, start_cell: null")
+            else:
+                lines.append('  players: []')
+        except Exception:
+            lines.append('  players: []')
+        lines.append('')
+
+        # Enemies
+        lines.append('== ENEMIES ==')
+        if not enemies:
+            lines.append('(none)')
+        else:
+            for eid, e in enemies.items():
+                etype = str(e.get('type') or '')
+                tdef = types.get(etype) or {}
+                name = str(tdef.get('name') or etype)
+                pos = e.get('pos') or [0.0, 0.0]
+                cx, cy = int(float(pos[0])), int(float(pos[1]))
+                lines.append(f"- id: {eid}")
+                lines.append(f"  type: {etype}")
+                lines.append(f"  name: {name}")
+                lines.append(f"  cell: [{cx}, {cy}]")
+                # Affinities
+                affin = fmt_aff(e.get('affinities') or {})
+                lines.append(f"  affinities: {affin}")
+                # Items held (if any fields exist)
+                held: List[str] = []
+                inv = e.get('inventory') or []
+                if isinstance(inv, list):
+                    for iid in inv:
+                        if isinstance(iid, str):
+                            nm = (ITEM_DB.get(iid) or {}).get('name') or iid
+                            held.append(str(nm))
+                lines.append(f"  holding: {held if held else '[]'}")
+                # Descriptions
+                descs = fill_desc(e)
+                lines.append("  descriptions:")
+                lines.append(f"    core: {descs['description_core']}")
+                if descs['description_seeks']:
+                    lines.append(f"    seeks: {descs['description_seeks']}")
+                if descs['description_fears']:
+                    lines.append(f"    fears: {descs['description_fears']}")
+                if descs['description_vulnerable']:
+                    lines.append(f"    vulnerable: {descs['description_vulnerable']}")
+                if descs['backstory']:
+                    lines.append(f"    backstory: {descs['backstory']}")
+        lines.append('')
+
+        # Classify entities for sections
+        chest_lines: List[str] = []
+        other_cont_lines: List[str] = []
+        ground_item_lines: List[str] = []
+        for ent in world_entities:
+            try:
+                if (ent.get('type') or 'item') != 'item':
+                    continue
+                iid = str(ent.get('item_id') or '')
+                if not iid:
+                    continue
+                itdef = ITEM_DB.get(iid) or {}
+                nm = str(itdef.get('name') or iid)
+                is_container = bool(itdef.get('container'))
+                spr = (ent.get('sprite') or {}).get('image') or ''
+                is_chest = iid.startswith('chest_') or (iid == 'chest_basic') or ('chest' in nm.lower()) or ('chest' in str(spr).lower())
+                pos = ent.get('pos') or [0.0, 0.0]
+                cx, cy = int(float(pos[0])), int(float(pos[1]))
+                if is_container and is_chest:
+                    chest_lines.append(f"- chest: {iid} ({nm}) at [{cx}, {cy}]")
+                    cont = ent.get('contents') or []
+                    if not cont:
+                        chest_lines.append("  contents: []")
+                    else:
+                        chest_lines.append("  contents:")
+                        for entry in cont:
+                            item_id = str((entry or {}).get('item') or '')
+                            qty = int((entry or {}).get('qty') or 1)
+                            it = ITEM_DB.get(item_id) or {}
+                            iname = str(it.get('name') or item_id)
+                            chest_lines.append(f"    - id: {item_id} x{qty} ({iname})")
+                            # If this is a generated scroll, include visible text and icon
+                            if item_id.startswith('scroll_'):
+                                icon = str(it.get('icon') or '')
+                                if icon:
+                                    chest_lines.append(f"      icon: {icon}")
+                                desc = str(it.get('description_core') or '')
+                                if desc:
+                                    for ln in desc.splitlines():
+                                        chest_lines.append(f"      | {ln}")
+                elif is_container:
+                    other_cont_lines.append(f"- container: {iid} ({nm}) at [{cx}, {cy}]")
+                    cont = ent.get('contents') or []
+                    if not cont:
+                        other_cont_lines.append("  contents: []")
+                    else:
+                        other_cont_lines.append("  contents:")
+                        for entry in cont:
+                            item_id = str((entry or {}).get('item') or '')
+                            qty = int((entry or {}).get('qty') or 1)
+                            it = ITEM_DB.get(item_id) or {}
+                            iname = str(it.get('name') or item_id)
+                            other_cont_lines.append(f"    - id: {item_id} x{qty} ({iname})")
+                else:
+                    # Ground items (equippable/leaves on floor)
+                    if itdef.get('allowed_slots'):
+                        ground_item_lines.append(f"- item: {iid} ({nm}) at [{cx}, {cy}]")
+            except Exception:
+                continue
+
+        # Chests
+        lines.append('== CHESTS ==')
+        if chest_lines:
+            lines.extend(chest_lines)
+        else:
+            lines.append('(none)')
+        lines.append('')
+
+        # Non-chest containers
+        lines.append('== CONTAINERS (NON-CHEST) ==')
+        if other_cont_lines:
+            lines.extend(other_cont_lines)
+        else:
+            lines.append('(none)')
+        lines.append('')
+
+        # Ground items
+        lines.append('== ITEMS (GROUND) ==')
+        if ground_item_lines:
+            lines.extend(ground_item_lines)
+        else:
+            lines.append('(none)')
+
+        # Write file
+        with open(fpath, 'w', encoding='utf-8') as f:
+            f.write('\n'.join(lines) + '\n')
+        WORLD_LOG_WRITTEN = True
+    except Exception:
+        # Do not crash game if logging fails
+        WORLD_LOG_WRITTEN = True
 
 def carve_rect(g, x0, y0, x1, y1, val=EMPTY):
     # inclusive rect bounds
@@ -1240,6 +1590,8 @@ def run_game(screen: pygame.surface.Surface, qr_surface: pygame.surface.Surface)
     init_grid_once()
     init_entities_once()
     init_random_enemies_once()
+    ensure_scrolls_generated_once()
+    write_world_log_once()
 
     while running:
         # Events to allow clean quit

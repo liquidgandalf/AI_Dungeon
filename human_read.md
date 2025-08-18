@@ -137,6 +137,43 @@ Key configurable options loaded by `app/config.py`:
   - Phone HUD shows the currently equipped right-hand item icon (e.g., pickaxe) or a fallback glyph.
   - Durability bars for left/right hands update live on every hit via an `equip` event containing per-slot `{ id, name, durability, max_durability }`.
 
+## Scrolls of Knowledge
+
+This feature adds discoverable scroll items that teach players about specific enemies using dynamic text tied to each enemy’s affinities.
+
+### Desired mechanics
+- __Linked to enemy types__: Each scroll corresponds to one enemy type and may focus on what the enemy seeks, fears, or is vulnerable to.
+- __Dynamic descriptions__: Enemy type templates in `config/enemy_types.json` provide text with placeholders:
+  - `description_core`: base flavor text for the enemy.
+  - `description_seeks`: may include `{WANTS_ITEM}`.
+  - `description_fears`: may include `{HATES_ITEM}`.
+  - `description_vulnerable`: may include `{VULNERABLE_ITEM}`.
+- __Affinity-driven__: Placeholders resolve using that enemy instance’s `affinities` (e.g., `fear`, `desire`, `vulnerable`) mapped to item IDs, which are then converted to item names.
+- __Deterministic chest placement__: Scrolls are pre-generated when the world/enemies initialize and are placed into chests at spawn time, not rolled at chest open.
+
+### What’s implemented
+- __Server-side generation__: After enemies spawn, `app/game.py` calls `ensure_scrolls_generated_once()` to:
+  - Inspect current enemy instances and their types (`get_enemy_type_map()` from `config/enemy_types.json`).
+  - Choose one facet per enemy type in priority order: desire → fear → vulnerable, if both the instance affinity and the corresponding description template exist.
+  - Build a unique item id (e.g., `scroll_<enemy_type>_<facet>`) and register it via `app/items.py` → `register_item()`.
+  - Compose final description by concatenating `description_core` and the resolved facet text (substituting placeholders with the affinity item’s display name via `get_item()`).
+- __Deterministic distribution__: A queue (`SCROLL_QUEUE`) of generated scroll IDs is maintained in `app/game.py`.
+  - Existing chests receive a scroll immediately during initialization by calling `_attach_container_contents()` on each chest entity.
+  - Future chests also receive a pending scroll (if any) when `_attach_container_contents()` runs.
+- __No randomization at open__: Scroll placement occurs at chest creation time; opening a chest does not re-roll contents.
+
+### Configuration and content
+- __Enemy templates__: Ensure enemy types define the description fields listed above in `config/enemy_types.json`. These are already present in the sample slimes and bosses.
+- __Affinities__: Enemy instance `affinities` are populated during enemy spawn logic (`init_random_enemies_once()`), and used by `ensure_scrolls_generated_once()`.
+- __Item names__: Placeholder replacements use the target item’s `name` from `ITEM_DB` (populated from `config/items.json`).
+- __Icon__: Generated scrolls reference an icon path `items/Scroll of Knowledge.png`. Provide this asset at `AI_Dungeon/static/img/items/` or adjust as needed.
+
+### Notes and limitations
+- __One scroll per enemy type per world init__: The system generates up to one scroll per enemy type (based on available affinity/template).
+- __Facet selection priority__: If multiple facets are available, desire is preferred, then fear, then vulnerable.
+- __Base template optional__: Scrolls are registered dynamically; a static base template in `config/items.json` is not required but can be added for consistency.
+- __Gameplay effects__: Current scrolls are informational. Hooking up special use-effects can be added later.
+
 ## Stats reference (current behavior)
 
 - **Item stats (`config/items.json`)**
