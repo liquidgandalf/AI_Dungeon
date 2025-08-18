@@ -89,6 +89,7 @@ import time
 import math
 import os
 import pygame
+import hashlib
 from typing import Dict, Tuple, List, Any
 from app.server import players, socketio
 from app import config as game_config
@@ -439,7 +440,7 @@ wall_type_id: List[List[str]] = []
 
 # Simple biome -> sky RGB palette (0..6), aligned with board biome_colors
 BIOME_SKY_COLORS: Dict[int, Tuple[int,int,int]] = {
-    0: (0, 0, 0),         # no biome -> black sky
+    0: (135, 206, 235),   # no biome -> sky blue
     1: (255, 120, 120),   # red
     2: (255, 190, 120),   # orange
     3: (255, 255, 150),   # yellow
@@ -467,6 +468,12 @@ def init_grid_once():
     grid = g
     # After maze, generate biomes
     biomes = generate_biomes()
+    # Carve an 8x8 cleared starting area on the far-left, centered vertically
+    # Keep within interior (avoid outer wall at y=0 and y=GRID_H-1)
+    sx0, sx1 = 1, 8  # x in [1..8]
+    sy0 = max(1, GRID_H // 2 - 4)
+    sy1 = min(GRID_H - 2, sy0 + 7)
+    carve_rect(grid, sx0, sy0, sx1, sy1, EMPTY)
     # Configure wall HP scaling from config (optional)
     try:
         walls_cfg = (game_config.get_game_config() or {}).get('walls') or {}
@@ -1513,7 +1520,27 @@ def ensure_player(sid: str):
             restore_seen = None
 
         if restore_cell is None:
-            cx, cy = random_empty_cell()
+            # Deterministic spawn within 8x8 starting area based on sid hash
+            sx0, sx1 = 1, 8
+            sy0 = max(1, GRID_H // 2 - 4)
+            sy1 = min(GRID_H - 2, sy0 + 7)
+            candidates = [(x, y) for y in range(sy0, sy1 + 1) for x in range(sx0, sx1 + 1)]
+            n = len(candidates)
+            try:
+                h = int.from_bytes(hashlib.sha256(sid.encode('utf-8')).digest()[:4], 'big')
+            except Exception:
+                h = abs(hash(sid))
+            start_idx = h % max(1, n)
+            chosen = None
+            for k in range(n):
+                cx_try, cy_try = candidates[(start_idx + k) % n]
+                if grid[cy_try][cx_try] == EMPTY and (cx_try, cy_try) not in occupied and (cx_try, cy_try) not in solid_cells:
+                    chosen = (cx_try, cy_try)
+                    break
+            if chosen is None:
+                cx, cy = random_empty_cell()
+            else:
+                cx, cy = chosen
         else:
             cx, cy = restore_cell
         occupied[(cx, cy)] = sid
@@ -1677,7 +1704,7 @@ def run_game(screen: pygame.surface.Surface, qr_surface: pygame.surface.Surface)
 
         # Draw biomes background on empty tiles and walls in white BEFORE players so they are not covered
         biome_colors = {
-            0: (16, 16, 16),
+            0: (135, 206, 235),  # sky blue for non-biome
             1: (255, 179, 186),  # pastel red
             2: (255, 223, 186),  # pastel orange
             3: (255, 255, 186),  # pastel yellow
@@ -1710,7 +1737,7 @@ def run_game(screen: pygame.surface.Surface, qr_surface: pygame.surface.Surface)
                             if d2 <= r2:
                                 # weight inversely proportional to distance (avoid div by 0)
                                 w = 1.0 / (1.0 + math.sqrt(max(0.0, d2)))
-                                base = biome_colors.get(bid, (16, 16, 16))
+                                base = biome_colors.get(bid, (135, 206, 235))
                                 cr += base[0] * w
                                 cg += base[1] * w
                                 cb += base[2] * w
@@ -1719,10 +1746,10 @@ def run_game(screen: pygame.surface.Surface, qr_surface: pygame.surface.Surface)
                             col = (int(cr / wt_sum), int(cg / wt_sum), int(cb / wt_sum))
                         else:
                             bid = biomes[y][x] if biomes else 0
-                            col = biome_colors.get(bid, (16, 16, 16))
+                            col = biome_colors.get(bid, (135, 206, 235))
                     else:
                         bid = biomes[y][x] if biomes else 0
-                        col = biome_colors.get(bid, (16, 16, 16))
+                        col = biome_colors.get(bid, (135, 206, 235))
                     pygame.draw.rect(screen, col, (tx, ty, TILE_SIZE, TILE_SIZE))
         # Draw walls on top in white
         wall_color = (255, 255, 255)
