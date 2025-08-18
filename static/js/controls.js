@@ -1,6 +1,88 @@
+  // Initialize Socket.IO early for modules that register listeners before the main IIFE
+  const socket = (typeof io !== 'undefined') ? io() : null;
+  if (socket) window.socket = socket;
+
+  // Scroll reading overlay elements
+  const scrollModal = document.getElementById('scroll-modal');
+  const scrollWrap = document.getElementById('scroll-wrap');
+  const scrollImg = document.getElementById('scroll-img');
+  const scrollText = document.getElementById('scroll-text');
+  let scrollTimer = null;
+
+  function showScrollOverlay(text, ms = 3000, imgPath, bounds){
+    try {
+      if (!scrollModal || !scrollImg || !scrollText) return;
+      if (typeof imgPath === 'string' && imgPath) {
+        const clean = imgPath.startsWith('/static/img/') ? imgPath : ('/static/img/' + imgPath.replace(/^\/+/, ''));
+        scrollImg.src = clean;
+      } else {
+        // Default background
+        scrollImg.src = '/static/img/items/blank_scroll.png';
+      }
+      // Apply optional bounds (percentages of wrap) or defaults
+      const b = bounds || {};
+      const left = (typeof b.leftPct === 'number') ? b.leftPct : 18;
+      const right = (typeof b.rightPct === 'number') ? b.rightPct : 18;
+      const top = (typeof b.topPct === 'number') ? b.topPct : 24;
+      const bottom = (typeof b.bottomPct === 'number') ? b.bottomPct : 18;
+      scrollText.style.left = left + '%';
+      scrollText.style.right = right + '%';
+      scrollText.style.top = top + '%';
+      scrollText.style.bottom = bottom + '%';
+      // Alignment controls
+      const align = (b.align || 'center');
+      scrollText.style.textAlign = align === 'left' ? 'left' : (align === 'right' ? 'right' : 'center');
+      scrollText.style.alignItems = 'flex-start';
+      scrollText.textContent = text || '';
+      scrollModal.style.display = 'flex';
+      // After layout, record pixel bounds for future use
+      const measure = () => {
+        try {
+          const wrapRect = scrollWrap.getBoundingClientRect();
+          const textRect = scrollText.getBoundingClientRect();
+          window.LAST_SCROLL_BOUNDS = {
+            wrap: { x: wrapRect.x, y: wrapRect.y, w: wrapRect.width, h: wrapRect.height },
+            text: { x: textRect.x, y: textRect.y, w: textRect.width, h: textRect.height },
+            pct: { left, right, top, bottom }
+          };
+        } catch(_) {}
+      };
+      // Defer to ensure CSS applied and image sized
+      requestAnimationFrame(() => requestAnimationFrame(measure));
+      if (scrollTimer) clearTimeout(scrollTimer);
+      scrollTimer = setTimeout(() => {
+        scrollModal.style.display = 'none';
+      }, Math.max(500, ms|0));
+    } catch(_){ /* noop */ }
+  }
+
+  // Allow ESC or tap backdrop to close early
+  if (scrollModal) {
+    scrollModal.addEventListener('click', (ev) => {
+      if (ev.target === scrollModal){
+        scrollModal.style.display = 'none';
+      }
+    });
+    window.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Escape'){
+        scrollModal.style.display = 'none';
+      }
+    });
+  }
+
+  // Server-driven overlay event
+  if (socket) socket.on('scroll_overlay', (payload) => {
+    if (!payload) return;
+    const text = payload.text || '';
+    const ms = typeof payload.ms === 'number' ? payload.ms : 3000;
+    const img = payload.img || null; // e.g., 'icons/blank_scroll.png' or full '/static/img/...'
+    const bounds = payload.bounds || null; // {leftPct,rightPct,topPct,bottomPct,align}
+    showScrollOverlay(text, ms, img, bounds);
+  });
+
 // SkeletonGame/static/js/controls.js
 (function(){
-  const socket = io();
+  const socket = (window.socket || (typeof io !== 'undefined' ? io() : null));
 
   const joinDiv = document.getElementById('join');
   const padDiv = document.getElementById('pad');

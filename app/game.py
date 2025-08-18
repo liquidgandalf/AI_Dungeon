@@ -141,6 +141,10 @@ entities_inited = False
 # Generated knowledge scrolls distribution queue
 SCROLL_QUEUE: List[str] = []
 SCROLLS_GENERATED: bool = False
+# Pillar spawn control
+PILLARS_SPAWNED: bool = False
+# One-time QA pillar at start area control
+START_PILLAR_PLACED: bool = False
 # World log flag
 WORLD_LOG_WRITTEN: bool = False
 # Cells blocked by solid entities (e.g., items/props/spawners)
@@ -421,6 +425,238 @@ def init_random_enemies_once():
 
     # For this test mode, do not add extra random enemies; total is 18 slimes + all bosses
     random_enemies_inited = True
+
+
+def _boss_instances_by_type() -> Dict[str, Dict[str, Any]]:
+    """Return a mapping etype -> one representative boss instance for that type."""
+    out = {}
+    types = get_enemy_type_map()
+    for inst in enemies.values():
+        tid = str(inst.get('type') or '')
+        if not tid or tid in out:
+            continue
+        tdef = types.get(tid) or {}
+        if bool(tdef.get('boss')):
+            out[tid] = inst
+    return out
+
+
+def _register_scroll_item(scroll_id: str, enemy_name: str) -> None:
+    """Ensure a scroll item type exists for this id."""
+    if ITEM_DB.get(scroll_id):
+        return
+    base_icon = (ITEM_DB.get('scroll_of_knowledge') or {}).get('icon') or 'items/scroll_of_knowledge.png'
+    register_item({
+        'id': scroll_id,
+        'name': f"Scroll of Knowledge: {enemy_name}",
+        'active': True,
+        'allowed_slots': [],
+        'spawn_type': None,
+        'icon': base_icon,
+        'special': True,
+        'stats': { 'weight': 0.2, 'durability': 1 },
+        'ranged_attack': 0,
+    })
+
+
+def _scroll_lore_text(scroll_id: str) -> str:
+    """Return the lore text for a given scroll id of form 'scroll_<etype>_<kind>'.
+    Kind in {'seeks','fears','vulnerable','backstory'}.
+    Substitutes placeholders using the representative boss instance affinities.
+    """
+    try:
+        sid = str(scroll_id or '')
+        # Special one-off welcome scroll shown on the start-area pillar
+        if sid == 'scroll_welcome':
+            return (
+                "Welcome to the Labyrinth!\n\n"
+                "Seek pillars of knowledge to learn the dungeon's secrets.\n"
+                "Use your hands to interact; beware the denizens within."
+            )
+        if not sid.startswith('scroll_'):
+            return ''
+        parts = sid.split('_', 2)
+        # Expected: ['scroll', '<etype>', '<kind>'] but etype may also contain underscores; split from right
+        parts = sid.split('_')
+        if len(parts) < 3:
+            return ''
+        kind = parts[-1]
+        etype = '_'.join(parts[1:-1])
+        types = get_enemy_type_map()
+        tdef = types.get(etype) or {}
+        # Find a representative instance to resolve affinities for substitution
+        bosses = _boss_instances_by_type()
+        inst = bosses.get(etype) or {}
+        affin = inst.get('affinities') or {}
+        def iname(iid: str) -> str:
+            it = ITEM_DB.get(str(iid) or '') or {}
+            return str(it.get('name', iid))
+        def sub(txt: str) -> str:
+            d = str(txt or '')
+            return (d
+                .replace('{WANTS_ITEM}', iname(affin.get('desire')) if affin.get('desire') else '')
+                .replace('{HATES_ITEM}', iname(affin.get('fear')) if affin.get('fear') else '')
+                .replace('{VULNERABLE_ITEM}', iname(affin.get('vulnerable')) if affin.get('vulnerable') else '')
+            )
+        if kind == 'seeks':
+            return sub(tdef.get('description_seeks') or '')
+        if kind == 'fears':
+            return sub(tdef.get('description_fears') or '')
+        if kind == 'vulnerable':
+            return sub(tdef.get('description_vulnerable') or '')
+        if kind == 'backstory':
+            return str(tdef.get('backstory') or '')
+        return ''
+    except Exception:
+        return ''
+
+
+def _generate_scrolls_for_bosses() -> List[Tuple[str, str]]:
+    """Create 4 scrolls per boss type (seeks, fears, vulnerable, backstory).
+    Returns list of (scroll_id, element) for placement. Element is one of 'water','fire','earth', or ''.
+    """
+    out: List[Tuple[str, str]] = []
+    types = get_enemy_type_map()
+    bosses = _boss_instances_by_type()
+    for etype, inst in bosses.items():
+        tdef = types.get(etype) or {}
+        enemy_name = tdef.get('name') or etype
+        element = (tdef.get('element') or '').lower()
+        for kind in ('seeks', 'fears', 'vulnerable', 'backstory'):
+            sid = f"scroll_{etype}_{kind}"
+            _register_scroll_item(sid, enemy_name)
+            out.append((sid, element))
+    return out
+
+
+def _pillar_type_for_element(elem: str) -> str:
+    e = (elem or '').lower()
+    if e == 'water':
+        return 'pillar_of_knowledge_water'
+    if e == 'fire':
+        return 'pillar_of_knowledge_fire'
+    if e == 'earth':
+        return 'pillar_of_knowledge_earth'
+    return 'pillar_of_knowledge'
+
+
+def _spawn_pillars_for_scrolls(scroll_elems: List[Tuple[str, str]]) -> None:
+    """Spawn one pillar per (scroll_id, pillar_element) pair and pre-fill its contents with that scroll.
+    Places pillars on empty, non-solid tiles. Idempotent via PILLARS_SPAWNED guard upstream.
+    The element in the pair dictates which pillar variant is used, regardless of the boss element.
+    """
+    ents: List[Dict[str, Any]] = []
+    for scroll_id, elem in scroll_elems:
+        cx, cy = random_empty_cell()
+        pos = [float(cx) + 0.5, float(cy) + 0.5]
+        pit = _pillar_type_for_element(elem)
+        # Choose sprite image from item definition icon
+        itdef = ITEM_DB.get(pit) or {}
+        icon = itdef.get('icon') or 'items/pillar_of_knowledge.png'
+        ent = {
+            'type': 'item',
+            'item_id': pit,
+            'pos': pos,
+            # Mark as container with pre-attached contents; _attach_container_contents will only append pending scrolls if any
+            'container': True,
+            'contents': [ { 'item': scroll_id, 'qty': 1 } ],
+            'sprite': {
+                'image': icon,
+                'base_width': 64,
+                'base_height': 128,
+                'scale': 1.0,
+                # Zero offset; items are anchored to floor bottom in renderer
+                'y_offset': 0,
+            }
+        }
+        ents.append(ent)
+    # Append to world and rebuild solids
+    world_entities.extend(ents)
+    rebuild_solid_cells()
+
+
+def ensure_knowledge_pillars_once() -> None:
+    """After enemies (and their affinities) are initialized, generate 40 scrolls (4 per boss)
+    and spawn matching elemental pillars across the map with those scrolls.
+    """
+    global SCROLLS_GENERATED, PILLARS_SPAWNED
+    if PILLARS_SPAWNED:
+        return
+    # Require enemies to exist first
+    if not enemies:
+        return
+    # Generate scroll items per boss
+    scrolls = _generate_scrolls_for_bosses()
+    # Optional: also push into queue for other containers if needed
+    if not SCROLLS_GENERATED:
+        SCROLL_QUEUE.extend([sid for (sid, _e) in scrolls])
+        SCROLLS_GENERATED = True
+    # Enforce distribution: 12 water, 12 earth, 16 fire (total 40)
+    target = {'water': 12, 'earth': 12, 'fire': 16}
+    # Buckets by boss element
+    buckets: Dict[str, List[str]] = {'water': [], 'earth': [], 'fire': [], 'other': []}
+    for sid, elem in scrolls:
+        e = (elem or '').lower()
+        if e in ('water', 'earth', 'fire'):
+            buckets[e].append(sid)
+        else:
+            buckets['other'].append(sid)
+    # Allocate scrolls to pillars; if a bucket is short, draw from others
+    alloc: List[Tuple[str, str]] = []  # (scroll_id, pillar_element)
+    used: set = set()
+    def take_from(bucket_name: str, need: int) -> List[str]:
+        picks: List[str] = []
+        pool = [s for s in buckets.get(bucket_name, []) if s not in used]
+        random.shuffle(pool)
+        n = min(max(0, need), len(pool))
+        picks.extend(pool[:n])
+        for s in picks:
+            used.add(s)
+        return picks
+    # First, satisfy from matching buckets
+    for elem_name, need in target.items():
+        picks = take_from(elem_name, need)
+        alloc.extend([(s, elem_name) for s in picks])
+    # Top up deficits from any remaining scrolls (prefer same-element leftovers then others)
+    for elem_name, need in target.items():
+        have = sum(1 for _sid, e in alloc if e == elem_name)
+        deficit = max(0, need - have)
+        if deficit <= 0:
+            continue
+        # Prefer same-element leftovers first
+        extra = take_from(elem_name, deficit)
+        deficit -= len(extra)
+        alloc.extend([(s, elem_name) for s in extra])
+        if deficit > 0:
+            # Pull from other + 'other'
+            leftovers = [s for bucket in ('water','earth','fire','other') for s in buckets.get(bucket, []) if s not in used]
+            random.shuffle(leftovers)
+            extra2 = leftovers[:deficit]
+            for s in extra2:
+                used.add(s)
+            alloc.extend([(s, elem_name) for s in extra2])
+    # If we still have fewer than total target pillars due to limited scrolls, stop at available
+    # Spawn pillars and pre-fill contents with allocated mapping
+    _spawn_pillars_for_scrolls(alloc)
+    PILLARS_SPAWNED = True
+
+
+def mark_scroll_read(sid: str, scroll_id: str) -> None:
+    """Record that a player has read a specific scroll id."""
+    try:
+        pdata = player_state.setdefault(sid, {})
+        known = pdata.setdefault('knowledge', [])
+        if scroll_id not in known:
+            known.append(scroll_id)
+    except Exception:
+        pass
+
+
+def get_player_knowledge(sid: str) -> List[str]:
+    try:
+        return list(player_state.get(sid, {}).get('knowledge') or [])
+    except Exception:
+        return []
 
 
 def render_enemies(screen: pygame.surface.Surface, visible: List[List[bool]] = None):
@@ -1408,6 +1644,102 @@ def place_chest_next_to(cx: int, cy: int):
         return
 
 
+def place_pillar_next_to(cx: int, cy: int, welcome: bool = False):
+    """Try to place a knowledge pillar on an adjacent empty tile to (cx, cy) for QA.
+    Prefers to attach one pending scroll from SCROLL_QUEUE if available.
+    Ensures enemies and pillars are initialized so scrolls exist.
+    """
+    # Make sure world/entities/enemies exist so we can generate pillars/scrolls if needed
+    try:
+        init_entities_once()
+    except Exception:
+        pass
+    try:
+        init_random_enemies_once()
+    except Exception:
+        pass
+    # Generate scrolls and pillars once so SCROLL_QUEUE is populated
+    try:
+        ensure_scrolls_generated_once()
+    except Exception:
+        pass
+    try:
+        ensure_knowledge_pillars_once()
+    except Exception:
+        pass
+
+    # Choose adjacent cell
+    for dx, dy in ((1,0), (-1,0), (0,1), (0,-1)):
+        nx, ny = cx + dx, cy + dy
+        if not (0 <= nx < GRID_W and 0 <= ny < GRID_H):
+            continue
+        if grid[ny][nx] != EMPTY:
+            continue
+        if (nx, ny) in occupied or (nx, ny) in solid_cells:
+            continue
+        # Avoid overlapping existing entity at same integer cell
+        conflict = False
+        for ent in world_entities:
+            pos = ent.get('pos') or ent.get('position')
+            if not pos or len(pos) < 2:
+                continue
+            ex, ey = int(float(pos[0])), int(float(pos[1]))
+            if ex == nx and ey == ny:
+                conflict = True
+                break
+        if conflict:
+            continue
+        # Determine a pillar type and optional scroll content
+        pillar_type = _pillar_type_for_element('')
+        contents = []
+        if welcome:
+            # Ensure a custom welcome scroll exists and attach it
+            try:
+                if not ITEM_DB.get('scroll_welcome'):
+                    register_item({
+                        'id': 'scroll_welcome',
+                        'name': 'Welcome Scroll',
+                        'active': True,
+                        'allowed_slots': [],
+                        'spawn_type': None,
+                        'icon': (ITEM_DB.get('scroll_of_knowledge') or {}).get('icon') or 'items/scroll_of_knowledge.png',
+                        'special': True,
+                        'stats': { 'weight': 0.2, 'durability': 1 },
+                        'ranged_attack': 0,
+                    })
+                contents.append({'item': 'scroll_welcome', 'qty': 1})
+            except Exception:
+                pass
+        elif SCROLL_QUEUE:
+            try:
+                sid = SCROLL_QUEUE.pop(0)
+                contents.append({'item': sid, 'qty': 1})
+            except Exception:
+                pass
+        ent = {
+            'type': 'item',
+            'item_id': pillar_type,
+            'pos': [float(nx) + 0.5, float(ny) + 0.5],
+            'container': True,
+            'contents': contents,
+            'sprite': {
+                'image': 'items/pillar_of_knowledge.png',
+                'base_width': 64,
+                'base_height': 128,
+                'scale': 1.0,
+                'y_offset': 0,
+            }
+        }
+        world_entities.append(ent)
+        rebuild_solid_cells()
+        # Mark one-time start pillar placement if this was the welcome pillar
+        if welcome:
+            global START_PILLAR_PLACED
+            START_PILLAR_PLACED = True
+        return True
+    return False
+
+
 def tick_enemies():
     """Basic timed random movement per enemy based on speed stat.
     speed 0 => no movement. speed 1 => ~3s per move. speed 256 => ~1s per move.
@@ -1577,9 +1909,11 @@ def ensure_player(sid: str):
                         seen[yy][xx] = True
         # Also drop a chest adjacent to the player's spawn for NEW spawns only
         # Do not respawn a chest if we are restoring a returning player
+        # Chest spawning next to new spawns was for testing only and is now disabled
         init_entities_once()
-        if restore_cell is None:
-            place_chest_next_to(cx, cy)
+        # For testing: place a single welcome pillar adjacent to the FIRST NEW spawn only
+        if restore_cell is None and not START_PILLAR_PLACED:
+            place_pillar_next_to(cx, cy, welcome=True)
 
 
 def apply_command(pos: Tuple[int, int], cmd: str) -> Tuple[int, int]:
@@ -1617,6 +1951,8 @@ def run_game(screen: pygame.surface.Surface, qr_surface: pygame.surface.Surface)
     init_grid_once()
     init_entities_once()
     init_random_enemies_once()
+    # After enemies exist, ensure knowledge pillars are spawned once (idempotent)
+    ensure_knowledge_pillars_once()
     ensure_scrolls_generated_once()
     write_world_log_once()
 
@@ -2056,6 +2392,59 @@ def run_game(screen: pygame.surface.Surface, qr_surface: pygame.surface.Surface)
                             socketio.emit('fx', { 'type': 'hit_spark' }, to=sid)
                         except Exception:
                             pass
+                else:
+                    # No wall-damage tool: treat as interaction with the front tile (e.g., read pillar scroll)
+                    try:
+                        cx, cy = player_state[sid]['cell']
+                        d = player_state[sid].get('dir', 'down')
+                        dx, dy = 0, 0
+                        if d == 'up':
+                            dy = -1
+                        elif d == 'down':
+                            dy = 1
+                        elif d == 'left':
+                            dx = -1
+                        elif d == 'right':
+                            dx = 1
+                        tx, ty = cx + dx, cy + dy
+                        # Find a pillar entity at target cell
+                        pillar = None
+                        for ent in world_entities:
+                            try:
+                                if (ent.get('type') or 'item') != 'item':
+                                    continue
+                                item_id = str(ent.get('item_id') or '')
+                                if not item_id.startswith('pillar_of_knowledge'):
+                                    continue
+                                pos = ent.get('pos') or ent.get('position')
+                                if not pos or len(pos) < 2:
+                                    continue
+                                ex, ey = int(float(pos[0])), int(float(pos[1]))
+                                if ex == tx and ey == ty:
+                                    pillar = ent
+                                    break
+                            except Exception:
+                                continue
+                        if pillar and isinstance(pillar.get('contents'), list) and pillar['contents']:
+                            # Read the first scroll entry
+                            entry = pillar['contents'][0]
+                            scroll_id = str(entry.get('item') or '')
+                            if scroll_id:
+                                lore = _scroll_lore_text(scroll_id)
+                                # Mark as read
+                                try:
+                                    mark_scroll_read(sid, scroll_id)
+                                except Exception:
+                                    pass
+                                # Emit overlay to this player
+                                try:
+                                    socketio.emit('scroll_overlay', {
+                                        'text': lore or 'You read the ancient script...'
+                                    }, to=sid)
+                                except Exception:
+                                    pass
+                    except Exception:
+                        pass
 
                     # Per-hit degradation is handled by wall return damage above (instance-based).
 
@@ -2099,7 +2488,7 @@ def run_game(screen: pygame.surface.Surface, qr_surface: pygame.surface.Surface)
         
 
         # Draw entity markers after biome overlays.
-        # Chests render as yellow dots for visibility; others remain green.
+        # Chests render as yellow dots for visibility; pillars render as black dots; others remain green.
         # If visibility.show_chests is true, chests are shown even through fog.
         for ent in world_entities:
             pos = ent.get('pos') or ent.get('position')
@@ -2111,6 +2500,7 @@ def run_game(screen: pygame.surface.Surface, qr_surface: pygame.surface.Surface)
             # Determine marker color and chest type
             item_id = str(ent.get('item_id') or '')
             is_chest = item_id.startswith('chest_')
+            is_pillar = item_id.startswith('pillar_of_knowledge')
             # Config toggle: show chests through fog
             try:
                 show_chests_through_fog = bool((vis_cfg or {}).get('show_chests', True))
@@ -2120,7 +2510,10 @@ def run_game(screen: pygame.surface.Surface, qr_surface: pygame.surface.Surface)
             tile_visible = (0 <= iy < GRID_H and 0 <= ix < GRID_W and visible_mask[iy][ix])
             if not tile_visible and not (is_chest and show_chests_through_fog):
                 continue
-            dot_color = (240, 220, 0) if is_chest else (50, 220, 50)
+            if is_pillar:
+                dot_color = (0, 0, 0)
+            else:
+                dot_color = (240, 220, 0) if is_chest else (50, 220, 50)
             # convert grid coords (floats) to pixel space
             px = BOARD_ORIGIN_X + int(ex * TILE_SIZE)
             py = BOARD_ORIGIN_Y + int(ey * TILE_SIZE)
@@ -2275,11 +2668,16 @@ def run_game(screen: pygame.surface.Surface, qr_surface: pygame.surface.Surface)
                 center_x = ray_x
                 x = center_x - out_w // 2
                 y = (RC_H - out_h) // 2 - y_off
-                # Anchor items so their vertical center sits on the floor line (screen center)
-                # This avoids floating while not pinning to the ceiling; add slight bias into floor
+                # Anchor items to an empirical floor line that shifts with distance.
+                # This better matches the floor perspective in our renderer.
                 if type_str == 'item':
-                    y = (RC_H // 2) - (out_h // 2) - y_off
-                    y += 4
+                    # Base floor line around ~86% of the screen height (lower on screen = larger Y)
+                    # Gentle taper with distance to keep items seated when far
+                    # Close (dist~1): ~0.86H - 1px; Far (dist>=12): ~0.86H - 6px
+                    floor_y = int((RC_H * 86) // 100)
+                    floor_y -= int(min(6, 0.5 * max(0.0, dist)))
+                    # Place item so its bottom sits on this floor line
+                    y = floor_y - out_h - y_off
 
                 # Sprite sheet or single image
                 if 'sheet' in spr:

@@ -360,5 +360,86 @@
     "stats": { "weight": 6.5, "durability": 100 },
     "description_core": "A cup that keeps the night topped off.",
     "backstory": "Toast once and the moment keeps refilling itself."
+  },
+  {
+    "id": "pillar_of_knowledge",
+    "name": "Pillar of Knowledge",
+    "allowed_slots": [],
+    "active": 1,
+    "spawn_type": null,
+    "icon": "items/pillar_of_knowledge.png",
+    "container": true,
+    "numberitems": 1,
+    "maycontain": [
+      { "item": "scroll_of_knowledge", "weight": 1, "min": 1, "max": 1 }
+    ],
+    "stats": {},
+    "ranged_attack": 0,
+    "description_core": "A silent column etched with questions; answers gather at its base.",
+    "backstory": "The Labyrinth grows these where stories want somewhere to stand."
+  },
+  {
+    "id": "pillar_of_knowledge_water",
+    "name": "Pillar of Knowledge (Water)",
+    "allowed_slots": [],
+    "active": 1,
+    "spawn_type": null,
+    "icon": "items/pillar_of_knowledge_water.png",
+    "container": true,
+    "numberitems": 1,
+    "maycontain": [
+      { "item": "scroll_of_knowledge", "weight": 1, "min": 1, "max": 1 }
+    ],
+    "stats": {},
+    "ranged_attack": 0,
+    "description_core": "Cool glyphs ripple across the stone like tide-marks of thought.",
+    "backstory": "It remembers every answer as a shoreline."
+  },
+  {
+    "id": "pillar_of_knowledge_fire",
+    "name": "Pillar of Knowledge (Fire)",
+    "allowed_slots": [],
+    "active": 1,
+    "spawn_type": null,
+    "icon": "items/pillar_of_knowledge_fire.png",
+    "container": true,
+    "numberitems": 1,
+    "maycontain": [
+      { "item": "scroll_of_knowledge", "weight": 1, "min": 1, "max": 1 }
+    ],
+    "stats": {},
+    "ranged_attack": 0,
+    "description_core": "Letters glow like embers; truths spark when approached.",
+    "backstory": "Some knowledge is best warmed before it’s kept."
+  },
+  {
+    "id": "pillar_of_knowledge_earth",
+    "name": "Pillar of Knowledge (Earth)",
+    "allowed_slots": [],
+    "active": 1,
+    "spawn_type": null,
+    "icon": "items/pillar_of_knowledge_earth.png",
+    "container": true,
+    "numberitems": 1,
+    "maycontain": [
+      { "item": "scroll_of_knowledge", "weight": 1, "min": 1, "max": 1 }
+    ],
+    "stats": {},
+    "ranged_attack": 0,
+    "description_core": "Grained inscriptions settle like sediment; each layer is a lesson.",
+    "backstory": "It keeps answers as strata and lets patience do the digging."
+  },
+  {
+    "id": "scroll_of_knowledge",
+    "name": "Scroll of Knowledge",
+    "allowed_slots": [],
+    "active": 1,
+    "spawn_type": null,
+    "icon": "items/Scroll of Knowledge.png",
+    "special": true,
+    "stats": { "weight": 0.2, "durability": 1 },
+    "ranged_attack": 0,
+    "description_core": "Dust-creased vellum that knows a name and what it means.",
+    "backstory": "The Labyrinth writes in the margins; the scroll remembers the rest."
   }
 ]

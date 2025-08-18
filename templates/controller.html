@@ -117,5 +117,15 @@
       <div style="margin-top:12px; font-size:12px; color:#bbb;">Greyed slots are locked until you find a larger backpack.</div>
     </div>
   </div>
+
+  <!-- Scroll Reading Overlay -->
+  <div id="scroll-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:9999; align-items:center; justify-content:center;">
+    <div id="scroll-wrap" style="position:relative; width:min(100vw, 1080px); max-height:90vh;">
+      <img id="scroll-img" src="/static/img/items/blank_scroll.png" alt="Scroll" style="width:100%; height:auto; display:block; border-radius:12px;" />
+      <!-- Default content box inside the parchment; JS can override via bounds from server -->
+      <!-- Approx interior: left/right ~16–18%, top ~22–26%, bottom ~16–22% depending on image -->
+      <div id="scroll-text" style="position:absolute; left:18%; right:18%; top:24%; bottom:18%; display:flex; align-items:flex-start; justify-content:center; text-align:center; color:#000; text-shadow:0 1px 1px rgba(255,255,255,0.25); font-size:clamp(22px,5.2vw,40px); line-height:1.25;"></div>
+    </div>
+  </div>
 </body>
 </html>
