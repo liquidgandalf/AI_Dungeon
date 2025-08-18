@@ -2,6 +2,38 @@
 
 This document summarizes what’s implemented, how to extend the game using JSON, and where to place assets (PNGs) for items and enemies.
 
+## Config overview: `config/game_config.json`
+
+Key configurable options loaded by `app/config.py`:
+
+- __initial_attributes_count__
+  - How many attribute points a new player starts with.
+
+- __speed__
+  - `maxspeedpermove`: max tiles per move tick (server enforces cooldowns accordingly).
+  - `minspeed`: minimum frames/ticks between moves (lower = faster movement cadence).
+  - `max_speed_stat` / `min_speed_stat`: clamps for how player Speed stat maps to cooldowns.
+
+- __spawns__
+  - `random_items`: number of random items to spawn at startup.
+  - `random_chests`: number of random chests to spawn.
+  - `random_enemies`: number of random enemies to spawn.
+
+- __biomes__
+  - `count`: number of biome centers.
+  - `radius`: base radius used when generating biome rooms and sky tinting.
+
+- __visibility__
+  - `mode`: how exploration visibility is handled. Supported values:
+    - `full`: everything is visible at all times (no fog, no reveal logic).
+    - `fog`: classic fog-of-war. Unseen tiles are hidden until seen; once seen, they remain dimly visible even when out of sight.
+    - `reveal`: only tiles within `reveal_radius` of the player are revealed; outside this radius is hidden each frame (no permanent memory).
+  - `reveal_radius`: radius (in tiles) used by `reveal` mode.
+  - `enemies`: whether enemy markers can be shown on the big map.
+  - `enemy_pings`: whether radar pings for enemies are shown on the big map.
+  - `enemy_pings_ignore_visibility`: if true, enemy pings can appear even on currently unseen tiles.
+  - `show_chests`: whether chest markers can be shown through fog on the big map.
+
 ## Dev Quickstart
 
 - **Run**: `python -m AI_Dungeon.main` (or run `AI_Dungeon/main.py`).
