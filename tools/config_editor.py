@@ -164,7 +164,7 @@ TEMPLATE = """
       </div>
     </form>
 
-    <p><small>Tip: A timestamped backup is written to the same folder on save.</small></p>
+    <p><small>Tip: Set <code>CONFIG_EDITOR_BACKUP=1</code> before starting the editor to write a timestamped backup on save.</small></p>
   </body>
 </html>
 """
@@ -178,11 +178,13 @@ def load_config():
 
 
 def save_config(cfg: dict):
-    # Backup existing file
-    ts = time.strftime("%Y%m%d-%H%M%S")
-    backup = CONFIG_PATH.with_suffix(f".json.bak.{ts}")
-    shutil.copy2(CONFIG_PATH, backup)
-    # Write new config with pretty formatting
+    # Optionally write a timestamped backup if enabled via env
+    backup_flag = os.environ.get("CONFIG_EDITOR_BACKUP", "0").strip().lower()
+    if backup_flag in ("1", "true", "yes", "on"): 
+        ts = time.strftime("%Y%m%d-%H%M%S")
+        backup = CONFIG_PATH.with_suffix(f".json.bak.{ts}")
+        shutil.copy2(CONFIG_PATH, backup)
+    # Write new config with pretty formatting atomically
     tmp_path = CONFIG_PATH.with_suffix(".json.tmp")
     with tmp_path.open("w", encoding="utf-8") as f:
         json.dump(cfg, f, indent=2)
