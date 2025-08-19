@@ -838,12 +838,15 @@
   let _lastSpriteLogTs = 0;
   // Wall texture (stone)
   const wallImg = getImage('tiles/stonewall.png');
+  // Door texture (wood)
+  const doorImg = getImage('tiles/door_wood.png');
   socket.on('frame', (data) => {
     if (!ctx || !data) return;
     const w = data.w|0, h = data.h|0;
     const heights = data.heights || [];
     const shades = data.shades || [];
     const dists = data.dists || [];
+    const mats = data.mat || [];
     const sprites = data.sprites || [];
     // Occasional debug: how many player sprites arrived and sample path
     try {
@@ -957,9 +960,12 @@
     ctx.restore();
     // Texture-map walls per screen column
     ctx.imageSmoothingEnabled = false;
-    const texReady = wallImg && wallImg.complete && wallImg.naturalWidth;
-    const texW = texReady ? wallImg.naturalWidth : 0;
-    const texH = texReady ? wallImg.naturalHeight : 0;
+    const wallReady = wallImg && wallImg.complete && wallImg.naturalWidth;
+    const wallW = wallReady ? wallImg.naturalWidth : 0;
+    const wallH = wallReady ? wallImg.naturalHeight : 0;
+    const doorReady = doorImg && doorImg.complete && doorImg.naturalWidth;
+    const doorW = doorReady ? doorImg.naturalWidth : 0;
+    const doorH = doorReady ? doorImg.naturalHeight : 0;
     for (let x = 0; x < w; x++) {
       const colH = heights[x] | 0;
       if (colH <= 0) continue;
@@ -970,11 +976,17 @@
       const [tr,tg,tb] = tintFromBiome(bid);
       const k = 0.35; // slightly lower blend so texture shows more
       const r = mix(shade, tr, k), g = mix(shade, tg, k), b = mix(shade, tb, k);
-      if (texReady){
+      // Choose texture by material id (e.g., 'door1' -> door texture)
+      const isDoor = (mats && typeof mats[x] === 'string') ? (mats[x] === 'door1') : false;
+      const img = isDoor ? doorImg : wallImg;
+      const ready = isDoor ? doorReady : wallReady;
+      const texW = isDoor ? doorW : wallW;
+      const texH = isDoor ? doorH : wallH;
+      if (ready){
         // Sample 1px vertical slice repeating across screen
         const sx = (x % texW);
         try {
-          ctx.drawImage(wallImg, sx, 0, 1, texH, x, y0, 1, colH);
+          ctx.drawImage(img, sx, 0, 1, texH, x, y0, 1, colH);
         } catch(_) {
           // fallback to flat fill on draw error
           ctx.fillStyle = `rgb(${r},${g},${b})`;
@@ -993,7 +1005,7 @@
         ctx.fillRect(x, y0, 1, colH);
       }
       // Overlay simple pattern for material feel only when texture not ready
-      if (!texReady){
+      if (!ready){
         const ov = overlayPatternForBiome(bid, colH);
         if (ov && colH > 0){
           ctx.save();

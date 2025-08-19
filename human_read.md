@@ -2,6 +2,9 @@
 
 This document summarizes what’s implemented, how to extend the game using JSON, and where to place assets (PNGs) for items and enemies.
 
+### At-a-glance
+- __Walls behavior__: see How walls work (current implementation) — [jump to section](#how-walls-work-current-implementation)
+
 ## Config overview: `config/game_config.json`
 
 Key configurable options loaded by `app/config.py`:
@@ -136,6 +139,40 @@ Key configurable options loaded by `app/config.py`:
 - **HUD right-hand icon**:
   - Phone HUD shows the currently equipped right-hand item icon (e.g., pickaxe) or a fallback glyph.
   - Durability bars for left/right hands update live on every hit via an `equip` event containing per-slot `{ id, name, durability, max_durability }`.
+
+## How walls work (current implementation)
+
+- __Generation__
+  - World grid starts fully walled; `app/game.py` → `generate_maze()` carves corridors/rooms, producing `EMPTY` vs `WALL` tiles.
+  - Function: `generate_maze()`; called from `init_grid_once()` after seeding and before biome generation.
+
+- __Types and HP from config__
+  - `config/wall_types.json` is loaded by `app/config.py` → `get_wall_types()`.
+  - `app/game.py` → `get_wall_type_map()` builds `type -> def` and `init_grid_once()` assigns wall types:
+    - All interior wall tiles get the default type (first from config or `stone1`).
+    - Outer border tiles become `outer_wall` if that type exists.
+  - Per-tile HP (`wall_hp` grid) is initialized from the assigned wall type’s `stats.durability`.
+  - Note: The code currently does not apply biome-based HP scaling; `walls.hp_base` / `walls.hp_per_biome` in `config/game_config.json` are read but not used in the HP calc.
+
+- __Breaking walls__
+  - Player hand actions check the tile in front. If it is `WALL`, damage may apply if:
+    - Equipped item type has `stats.wall_damage > 0` (from `config/items.json`).
+    - The target wall type allows the tool: `damage_items` list in `wall_types.json` contains the item type id.
+  - On a valid hit (`app/game.py` around the run loop):
+    - Decrement `wall_hp[y][x]` by the tool’s `wall_damage`.
+    - If HP <= 0, the grid cell becomes `EMPTY`.
+    - Apply tool wear to the specific equipped instance using wall type’s `stats.damaged` (or `stats.damage` fallback).
+      - When the instance durability reaches 0, it is unequipped and removed; an `equip` snapshot is emitted.
+
+- __Rendering__
+  - Desktop map: walls are drawn as solid white rectangles; `image` fields in `wall_types.json` are not used yet for wall sprites.
+  - HP currently does not affect wall color/FX on the desktop map.
+
+- __Key code paths__
+  - Config load: `app/config.py` → `reload_all()`, `get_wall_types()`.
+  - Wall types cache: `app/game.py` → `get_wall_type_map()`.
+  - Grid/type/HP init: `app/game.py` → `init_grid_once()`.
+  - Hand action and breaking: `app/game.py` → player loop handling pending actions (damage gating, HP decrement, tool wear).
 
 ## Scrolls of Knowledge
 
@@ -399,6 +436,42 @@ The client looks up images at `/static/img/<path>`. For example, `items/chest.pn
 - **Pickup and chest interactions** (use action near entity to pick up or open container).
 - **Per-item sprite defaults** in `items.json` to avoid duplicating sprite blocks in `map_entities.json`.
 - **Admin tools** to reload JSON configs at runtime.
+
+### Phone view wall textures (stone vs door)
+
+- **What renders**
+  - The phone view raycaster renders walls column-by-column in `static/js/controls.js` using 1px-wide vertical slices from 128x128 textures.
+  - Server emits a per-column material array so the client can choose textures per column.
+
+- **Server payload** (`app/game.py`)
+  - For each ray, the server tags the hit cell’s wall material id into `mat[r]` (e.g., `"door1"`).
+  - The `frame` payload includes: `w, h, heights, shades, dists, mat, sprites, sky, biome, angle`.
+
+- **Client selection** (`static/js/controls.js`)
+  - Loads textures once via `getImage()`:
+    - Wall: `tiles/stonewall.png`
+    - Door: `tiles/door_wood.png`
+  - In the render loop: if `data.mat[x] === 'door1'` use the door texture for that column; otherwise use the wall texture.
+  - Biome tinting and shading are applied on top of the drawn slice (multiply overlay).
+
+- **Texture sizes**
+  - `static/img/tiles/stonewall.png` → 128x128
+  - `static/img/tiles/door_wood.png` → 128x128
+  - Matching sizes ensure seamless swapping without scaling.
+
+- **Paths and where images live**
+  - Client resolves images under `/static/img/`.
+  - Therefore, the above paths must exist as:
+    - `AI_Dungeon/static/img/tiles/stonewall.png`
+    - `AI_Dungeon/static/img/tiles/door_wood.png`
+
+- **Troubleshooting door shows as flat/no texture**
+  - Verify file exists and path is correct/case-sensitive:
+    - Check browser devtools Network tab for `GET /static/img/tiles/door_wood.png` status 200 and non-zero size.
+  - Confirm the material id is exactly `'door1'` in `config/wall_types.json` and that doors are placed as wall tiles.
+  - Inspect incoming frames in devtools console: ensure `data.mat` contains `'door1'` values where the doorway is.
+  - Ensure the image finished loading before first use (the code falls back to solid fill if `doorImg` isn’t ready). Moving/turning again after load should display it.
+  - If customizing names/paths, update the client check and `getImage()` calls accordingly.
 
 ## Troubleshooting
 - If a sprite doesn’t render:

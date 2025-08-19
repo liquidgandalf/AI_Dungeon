@@ -21,6 +21,27 @@
     ]
   },
   {
+    "type": "door1",
+    "name": "Wood Door",
+    "image": "door_wood.png",
+    "stats": {
+      "durability": 10,
+      "damage": 1,
+      "strength": 0,
+      "attack": 0,
+      "defense": 0,
+      "water_damage": 0,
+      "water_defense": 0,
+      "fire_damage": 0,
+      "fire_defense": 0,
+      "earth_damage": 0,
+      "earth_defense": 0
+    },
+    "damage_items": [
+      "pickaxe_basic"
+    ]
+  },
+  {
     "type": "outer_wall",
     "name": "Outer Boundary",
     "image": "wall_outer.png",

@@ -6,31 +6,117 @@
     "max_speed_stat": 16,
     "min_speed_stat": 1
   },
-  "spawns": { "random_items": 0, "random_chests": 60, "random_enemies": 25 },
-  "biomes": { "count": 6, "radius": 40 },
+  "spawns": {
+    "random_items": 0,
+    "random_chests": 60,
+    "random_enemies": 25
+  },
+  "biomes": {
+    "count": 6,
+    "radius": 40
+  },
+  "rooms": {
+    "count": 24
+  },
   "visibility": {
     "mode": "full",
     "reveal_radius": 6,
     "enemies": true,
     "enemy_pings": true,
-    "show_chests": true
+    "show_chests": true,
+    "enemy_pings_ignore_visibility": false
   },
   "tuning": {
     "item_floor_bias_px": 0,
     "item_bias_step_px": 1,
-    "item_scale_curve_default": [[1, 1.15], [2, 1.02], [3, 0.92], [5, 0.78]],
-    "item_y_bias_curve_default": [[1, 6], [2, 3], [3, 0], [5, -4]],
+    "item_scale_curve_default": [
+      [
+        1,
+        1.15
+      ],
+      [
+        2,
+        1.02
+      ],
+      [
+        3,
+        0.92
+      ],
+      [
+        5,
+        0.78
+      ]
+    ],
+    "item_y_bias_curve_default": [
+      [
+        1,
+        6
+      ],
+      [
+        2,
+        3
+      ],
+      [
+        3,
+        0
+      ],
+      [
+        5,
+        -4
+      ]
+    ],
     "item_draw_max_dist": 6,
-    "enemy_scale_curve_default": [[1, 1.05], [2, 1.0], [3, 0.95], [5, 0.9]],
-    "enemy_y_bias_curve_default": [[1, 0], [2, -2], [3, -4], [5, -6]]
+    "enemy_scale_curve_default": [
+      [
+        1,
+        1.05
+      ],
+      [
+        2,
+        1.0
+      ],
+      [
+        3,
+        0.95
+      ],
+      [
+        5,
+        0.9
+      ]
+    ],
+    "enemy_y_bias_curve_default": [
+      [
+        1,
+        0
+      ],
+      [
+        2,
+        -2
+      ],
+      [
+        3,
+        -4
+      ],
+      [
+        5,
+        -6
+      ]
+    ]
   },
   "qa": {
     "test_item": {
       "enabled": false,
       "item_id": "pillar_of_knowledge",
-      "distances": [1, 2, 3, 4, 5],
+      "distances": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
       "spawn_next_to_wall": true,
       "spawn_count_per_dist": 1
     }
-  }
+  },
+  "seed": null
 }
