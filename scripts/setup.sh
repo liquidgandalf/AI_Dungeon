@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+python3 main.py#!/usr/bin/env bash
 set -euo pipefail
 
 # Setup script for AI_Dungeon

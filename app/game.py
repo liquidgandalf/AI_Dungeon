@@ -727,6 +727,14 @@ def init_grid_once():
     global grid, biomes, wall_hp, WALL_HP_BASE, WALL_HP_PER_BIOME, wall_type_id
     if grid is not None:
         return
+    # Apply deterministic seed if provided in config
+    try:
+        cfg = game_config.get_game_config() or {}
+        seed = cfg.get('seed', None)
+        if seed not in (None, ''):
+            random.seed(str(seed))
+    except Exception:
+        pass
     # Start all walls
     g = [[WALL for _ in range(GRID_W)] for _ in range(GRID_H)]
     # Generate maze into g
