@@ -2,6 +2,9 @@
 
 This document summarizes what’s implemented, how to extend the game using JSON, and where to place assets (PNGs) for items and enemies.
 
+### At-a-glance
+- __Walls behavior__: see How walls work (current implementation) — [jump to section](#how-walls-work-current-implementation)
+
 ## Config overview: `config/game_config.json`
 
 Key configurable options loaded by `app/config.py`:
@@ -136,6 +139,40 @@ Key configurable options loaded by `app/config.py`:
 - **HUD right-hand icon**:
   - Phone HUD shows the currently equipped right-hand item icon (e.g., pickaxe) or a fallback glyph.
   - Durability bars for left/right hands update live on every hit via an `equip` event containing per-slot `{ id, name, durability, max_durability }`.
+
+## How walls work (current implementation)
+
+- __Generation__
+  - World grid starts fully walled; `app/game.py` → `generate_maze()` carves corridors/rooms, producing `EMPTY` vs `WALL` tiles.
+  - Function: `generate_maze()`; called from `init_grid_once()` after seeding and before biome generation.
+
+- __Types and HP from config__
+  - `config/wall_types.json` is loaded by `app/config.py` → `get_wall_types()`.
+  - `app/game.py` → `get_wall_type_map()` builds `type -> def` and `init_grid_once()` assigns wall types:
+    - All interior wall tiles get the default type (first from config or `stone1`).
+    - Outer border tiles become `outer_wall` if that type exists.
+  - Per-tile HP (`wall_hp` grid) is initialized from the assigned wall type’s `stats.durability`.
+  - Note: The code currently does not apply biome-based HP scaling; `walls.hp_base` / `walls.hp_per_biome` in `config/game_config.json` are read but not used in the HP calc.
+
+- __Breaking walls__
+  - Player hand actions check the tile in front. If it is `WALL`, damage may apply if:
+    - Equipped item type has `stats.wall_damage > 0` (from `config/items.json`).
+    - The target wall type allows the tool: `damage_items` list in `wall_types.json` contains the item type id.
+  - On a valid hit (`app/game.py` around the run loop):
+    - Decrement `wall_hp[y][x]` by the tool’s `wall_damage`.
+    - If HP <= 0, the grid cell becomes `EMPTY`.
+    - Apply tool wear to the specific equipped instance using wall type’s `stats.damaged` (or `stats.damage` fallback).
+      - When the instance durability reaches 0, it is unequipped and removed; an `equip` snapshot is emitted.
+
+- __Rendering__
+  - Desktop map: walls are drawn as solid white rectangles; `image` fields in `wall_types.json` are not used yet for wall sprites.
+  - HP currently does not affect wall color/FX on the desktop map.
+
+- __Key code paths__
+  - Config load: `app/config.py` → `reload_all()`, `get_wall_types()`.
+  - Wall types cache: `app/game.py` → `get_wall_type_map()`.
+  - Grid/type/HP init: `app/game.py` → `init_grid_once()`.
+  - Hand action and breaking: `app/game.py` → player loop handling pending actions (damage gating, HP decrement, tool wear).
 
 ## Scrolls of Knowledge
 
