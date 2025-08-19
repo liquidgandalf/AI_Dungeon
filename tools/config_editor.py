@@ -158,6 +158,9 @@ TEMPLATE = """
       <div class="actions">
         <button type="submit">Save</button>
         <a class="btn secondary" href="{{ url_for('index') }}">Reload</a>
+        <form method="post" action="{{ url_for('shutdown') }}" onsubmit="return confirm('Stop the config editor now?');" style="display:inline-block;">
+          <button class="btn secondary" type="submit">Stop Server</button>
+        </form>
       </div>
     </form>
 
@@ -269,6 +272,23 @@ def save():
     except Exception as e:
         flash(f"Error: {e}", 'err')
         return redirect(url_for('index'))
+
+
+def _shutdown_server():
+    # Works with Werkzeug development server
+    func = request.environ.get('werkzeug.server.shutdown')
+    if func is None:
+        raise RuntimeError('Server shutdown not supported in this environment')
+    func()
+
+
+@app.route('/shutdown', methods=['POST'])
+def shutdown():
+    try:
+        _shutdown_server()
+        return 'Shutting down...', 200
+    except Exception as e:
+        return f'Failed to shutdown: {e}', 500
 
 
 # Helpers to bridge simple dict to dot-access in template
