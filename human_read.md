@@ -437,6 +437,42 @@ The client looks up images at `/static/img/<path>`. For example, `items/chest.pn
 - **Per-item sprite defaults** in `items.json` to avoid duplicating sprite blocks in `map_entities.json`.
 - **Admin tools** to reload JSON configs at runtime.
 
+### Phone view wall textures (stone vs door)
+
+- **What renders**
+  - The phone view raycaster renders walls column-by-column in `static/js/controls.js` using 1px-wide vertical slices from 128x128 textures.
+  - Server emits a per-column material array so the client can choose textures per column.
+
+- **Server payload** (`app/game.py`)
+  - For each ray, the server tags the hit cell’s wall material id into `mat[r]` (e.g., `"door1"`).
+  - The `frame` payload includes: `w, h, heights, shades, dists, mat, sprites, sky, biome, angle`.
+
+- **Client selection** (`static/js/controls.js`)
+  - Loads textures once via `getImage()`:
+    - Wall: `tiles/stonewall.png`
+    - Door: `tiles/door_wood.png`
+  - In the render loop: if `data.mat[x] === 'door1'` use the door texture for that column; otherwise use the wall texture.
+  - Biome tinting and shading are applied on top of the drawn slice (multiply overlay).
+
+- **Texture sizes**
+  - `static/img/tiles/stonewall.png` → 128x128
+  - `static/img/tiles/door_wood.png` → 128x128
+  - Matching sizes ensure seamless swapping without scaling.
+
+- **Paths and where images live**
+  - Client resolves images under `/static/img/`.
+  - Therefore, the above paths must exist as:
+    - `AI_Dungeon/static/img/tiles/stonewall.png`
+    - `AI_Dungeon/static/img/tiles/door_wood.png`
+
+- **Troubleshooting door shows as flat/no texture**
+  - Verify file exists and path is correct/case-sensitive:
+    - Check browser devtools Network tab for `GET /static/img/tiles/door_wood.png` status 200 and non-zero size.
+  - Confirm the material id is exactly `'door1'` in `config/wall_types.json` and that doors are placed as wall tiles.
+  - Inspect incoming frames in devtools console: ensure `data.mat` contains `'door1'` values where the doorway is.
+  - Ensure the image finished loading before first use (the code falls back to solid fill if `doorImg` isn’t ready). Moving/turning again after load should display it.
+  - If customizing names/paths, update the client check and `getImage()` calls accordingly.
+
 ## Troubleshooting
 - If a sprite doesn’t render:
   - Check the `sprite.image`/`sprite.sheet` path relative to `/static/img/`.

@@ -2905,6 +2905,8 @@ def run_game(screen: pygame.surface.Surface, qr_surface: pygame.surface.Surface)
             heights = [0] * RC_NUM_RAYS
             shades = [0] * RC_NUM_RAYS
             dists = [0.0] * RC_NUM_RAYS
+            # Per-ray material id (e.g., 'door1' or wall type) for client texture selection
+            mats = [""] * RC_NUM_RAYS
 
             for r in range(RC_NUM_RAYS):
                 # ray angle across FOV
@@ -2970,6 +2972,11 @@ def run_game(screen: pygame.surface.Surface, qr_surface: pygame.surface.Surface)
 
                 # Additional darkening to simulate cracks based on wall HP
                 if 0 <= map_x < GRID_W and 0 <= map_y < GRID_H and grid[map_y][map_x] == WALL:
+                    # Capture wall material id at hit cell for client texture swap (e.g., 'door1')
+                    try:
+                        mats[r] = str(wall_type_id[map_y][map_x]) if wall_type_id else ""
+                    except Exception:
+                        mats[r] = ""
                     hp = wall_hp[map_y][map_x]
                     # compute local max based on biome
                     try:
@@ -3228,6 +3235,7 @@ def run_game(screen: pygame.surface.Surface, qr_surface: pygame.surface.Surface)
                 'heights': heights,
                 'shades': shades,
                 'dists': dists,
+                'mat': mats,
                 'sprites': sorted(sprites, key=lambda s: -s['depth']),
                 'sky': [int(sky_r), int(sky_g), int(sky_b)],
                 'biome': int(bid),
