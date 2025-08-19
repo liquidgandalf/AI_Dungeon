@@ -58,6 +58,11 @@ TEMPLATE = """
         <h3>Player & Speed</h3>
         <div class="row">
           <div class="col">
+            <label for="seed">Seed</label>
+            <input type="text" id="seed" name="seed" value="{{ cfg.seed or '' }}" placeholder="(empty = random each run)">
+            <small class="hint">Leave blank for a fresh random world each run. Set a value to make world generation reproducible.</small>
+          </div>
+          <div class="col">
             <label for="initial_attributes_count">Initial attribute points</label>
             <input type="number" id="initial_attributes_count" name="initial_attributes_count" value="{{ cfg.initial_attributes_count }}" min="0" step="1">
           </div>
@@ -232,6 +237,10 @@ def save():
     try:
         cfg = load_config()
         form = request.form
+
+        # Seed (string; empty clears to None)
+        raw_seed = (form.get('seed') or '').strip()
+        nested_set(cfg, 'seed', (raw_seed if raw_seed != '' else None))
 
         # Numeric fields
         set_num(cfg, 'initial_attributes_count', form.get('initial_attributes_count'), min_val=0)

@@ -36,6 +36,7 @@ def get_game_config() -> Dict[str, Any]:
         reload_all()
         # defaults if missing keys
     # sensible defaults
+    _game_config.setdefault('seed', None)
     _game_config.setdefault('initial_attributes_count', 10)
     _game_config.setdefault('speed', {
         'maxspeedpermove': 1,
