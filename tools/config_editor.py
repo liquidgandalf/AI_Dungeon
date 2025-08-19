@@ -112,6 +112,11 @@ TEMPLATE = """
             <label for="biomes.radius">Biome radius</label>
             <input type="number" id="biomes.radius" name="biomes.radius" value="{{ cfg.biomes.radius }}" min="1" step="1">
           </div>
+          <div class="col">
+            <label for="rooms.count">Rooms (9x9) to carve</label>
+            <input type="number" id="rooms.count" name="rooms.count" value="{{ (cfg.rooms.count if cfg.rooms and cfg.rooms.count is not none else 12) }}" min="0" step="1">
+            <small class="hint">Each room is 9x9 with 7x7 interior. Doors connect to corridors.</small>
+          </div>
         </div>
       </div>
 
@@ -258,6 +263,7 @@ def save():
         set_num(cfg, 'spawns.random_enemies', form.get('spawns.random_enemies'), min_val=0)
         set_num(cfg, 'biomes.count', form.get('biomes.count'), min_val=0)
         set_num(cfg, 'biomes.radius', form.get('biomes.radius'), min_val=1)
+        set_num(cfg, 'rooms.count', form.get('rooms.count'), min_val=0)
         set_num(cfg, 'visibility.reveal_radius', form.get('visibility.reveal_radius'), min_val=1)
 
         # Selects / booleans

@@ -8,6 +8,7 @@
   },
   "spawns": { "random_items": 0, "random_chests": 60, "random_enemies": 25 },
   "biomes": { "count": 6, "radius": 40 },
+  "rooms": { "count": 12 },
   "visibility": {
     "mode": "full",
     "reveal_radius": 6,

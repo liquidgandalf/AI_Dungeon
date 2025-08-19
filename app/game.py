@@ -183,6 +183,8 @@ solid_cells: set = set()
 # Enemy instances and occupancy
 enemies: Dict[str, Dict[str, Any]] = {}
 random_enemies_inited: bool = False
+# Persisted room metadata for logging/QA
+ROOMS: List[Dict[str, Any]] = []
 
 def enemy_occupied_cells() -> Dict[Tuple[int,int], str]:
     occ: Dict[Tuple[int,int], str] = {}
@@ -739,6 +741,13 @@ def init_grid_once():
     g = [[WALL for _ in range(GRID_W)] for _ in range(GRID_H)]
     # Generate maze into g
     generate_maze(g, corridor_w=2, wall_w=1, room_prob=0.08)
+    # Add rectangular rooms with doors before finalizing grid
+    try:
+        rooms_cfg = (cfg.get('rooms') or {})
+        room_count = int(rooms_cfg.get('count', 12))
+    except Exception:
+        room_count = 12
+    door_coords = add_rooms(g, room_count, size=9)
     grid = g
     # After maze, generate biomes
     biomes = generate_biomes()
@@ -783,6 +792,14 @@ def init_grid_once():
             if grid[y][x] == WALL:
                 wall_type_id[y][x] = outer_type
                 wall_hp[y][x] = outer_hp
+    # Apply door wall types and HP for any doors placed
+    door_type = 'door1' if 'door1' in wt_map else None
+    if door_type and 'door1' in wt_map:
+        d_hp = _hp_max_for_type(door_type)
+        for (dx, dy) in door_coords:
+            if 0 <= dx < GRID_W and 0 <= dy < GRID_H and grid[dy][dx] == WALL:
+                wall_type_id[dy][dx] = door_type
+                wall_hp[dy][dx] = d_hp
         y = GRID_H - 1
         for x in range(GRID_W):
             if grid[y][x] == WALL:
@@ -1365,6 +1382,29 @@ def write_world_log_once() -> None:
             except Exception:
                 continue
         lines.append(f"  counts: {{ enemies: {enemy_count}, chests: {chest_count}, containers: {other_container_count}, ground_items: {ground_item_count} }}")
+        # Rooms and doors
+        try:
+            if ROOMS:
+                lines.append('  rooms:')
+                for r in ROOMS:
+                    rect = r.get('rect') or []
+                    doors = r.get('doors') or []
+                    lines.append(f"    - rect: {rect}, doors: {doors}")
+            # Also include detected door tiles by wall type scan
+            if wall_type_id:
+                det = []
+                for y in range(min(GRID_H, len(wall_type_id))):
+                    row = wall_type_id[y]
+                    if not row:
+                        continue
+                    for x in range(min(GRID_W, len(row))):
+                        if row[x] == 'door1':
+                            det.append([x, y])
+                lines.append(f"  doors_detected: count={len(det)}")
+                if det:
+                    lines.append(f"  door_tiles: {det}")
+        except Exception:
+            pass
         # Player starts
         try:
             if player_state:
@@ -1520,6 +1560,94 @@ def carve_rect(g, x0, y0, x1, y1, val=EMPTY):
         row = g[y]
         for x in range(max(0, x0), min(GRID_W, x1 + 1)):
             row[x] = val
+
+
+def add_rooms(g, room_count: int, size: int = 9) -> List[Tuple[int, int]]:
+    """Carve rectangular rooms onto grid g.
+    - Rooms are `size` x `size` (default 9x9)
+    - Interior (size-2) x (size-2) is EMPTY, leaving a 1-tile wall ring
+    - Place 1-4 doors at midpoints of edges; a door is a WALL tile that will be
+      assigned wall type 'door1' later. Carve 3-tile tunnel outward from each door
+      to ensure connectivity into the maze corridors.
+    Returns list of door coordinates [(x,y), ...] for later type/HP assignment.
+    """
+    global ROOMS
+    doors: List[Tuple[int, int]] = []
+    if room_count <= 0 or size < 5:
+        return doors
+    ring = 1
+    inner = size - 2
+    # Require margin from outer border so tunnels can be carved (3 outward)
+    tunnel_len = 3
+    margin = ring + tunnel_len + 1  # +1 to avoid outer wall at index 0/GRID-1
+    attempts = max(50, room_count * 20)
+    placed = 0
+    for _ in range(attempts):
+        if placed >= room_count:
+            break
+        x0 = random.randrange(margin, GRID_W - margin - size + 1)
+        y0 = random.randrange(margin, GRID_H - margin - size + 1)
+        x1 = x0 + size - 1
+        y1 = y0 + size - 1
+        # Previously required the area to be all walls. Relax this so rooms can
+        # overwrite corridors; tunnels will reconnect rooms to the maze.
+        # Fill full area with walls (ensures ring), then carve interior EMPTY
+        carve_rect(g, x0, y0, x1, y1, WALL)
+        carve_rect(g, x0 + ring, y0 + ring, x1 - ring, y1 - ring, EMPTY)
+        # Door candidates: midpoints of each side on the ring
+        mids = [
+            (x0 + size // 2, y0),        # top
+            (x0 + size // 2, y1),        # bottom
+            (x0, y0 + size // 2),        # left
+            (x1, y0 + size // 2),        # right
+        ]
+        # Randomly choose 1-4 doors
+        k = random.randint(1, 4)
+        random.shuffle(mids)
+        picks = mids[:k]
+        room_doors: List[Tuple[int, int]] = []
+        for (dx, dy) in picks:
+            # Ensure ring at door position is a wall
+            if g[dy][dx] != WALL:
+                g[dy][dx] = WALL
+            doors.append((dx, dy))
+            room_doors.append((dx, dy))
+            # Carve tunnel outward from the door (not through the door tile itself)
+            if dy == y0 and dx != x0 and dx != x1:
+                # top edge; outward is -y
+                ox, oy = dx, dy - 1
+                for t in range(tunnel_len):
+                    ty = oy - t
+                    if 1 <= ty < GRID_H - 1:
+                        g[ty][ox] = EMPTY
+            elif dy == y1 and dx != x0 and dx != x1:
+                # bottom edge; outward is +y
+                ox, oy = dx, dy + 1
+                for t in range(tunnel_len):
+                    ty = oy + t
+                    if 1 <= ty < GRID_H - 1:
+                        g[ty][ox] = EMPTY
+            elif dx == x0 and dy != y0 and dy != y1:
+                # left edge; outward is -x
+                ox, oy = dx - 1, dy
+                for t in range(tunnel_len):
+                    tx = ox - t
+                    if 1 <= tx < GRID_W - 1:
+                        g[oy][tx] = EMPTY
+            elif dx == x1 and dy != y0 and dy != y1:
+                # right edge; outward is +x
+                ox, oy = dx + 1, dy
+                for t in range(tunnel_len):
+                    tx = ox + t
+                    if 1 <= tx < GRID_W - 1:
+                        g[oy][tx] = EMPTY
+        # Persist room metadata for logs
+        ROOMS.append({
+            'rect': [x0, y0, x1, y1],
+            'doors': [[dx, dy] for (dx, dy) in room_doors],
+        })
+        placed += 1
+    return doors
 
 
 def generate_maze(g, corridor_w=3, wall_w=1, room_prob=0.08):
@@ -2264,14 +2392,20 @@ def run_game(screen: pygame.surface.Surface, qr_surface: pygame.surface.Surface)
                         bid = biomes[y][x] if biomes else 0
                         col = biome_colors.get(bid, (135, 206, 235))
                     pygame.draw.rect(screen, col, (tx, ty, TILE_SIZE, TILE_SIZE))
-        # Draw walls on top in white
+        # Draw walls on top; doors (door1) are brown, others white
         wall_color = (255, 255, 255)
         for y in range(GRID_H):
             for x in range(GRID_W):
                 if grid[y][x] == WALL:
                     tx, ty = cell_to_px(x, y)
                     if visible_mask[y][x]:
-                        pygame.draw.rect(screen, wall_color, (tx, ty, TILE_SIZE, TILE_SIZE))
+                        col = wall_color
+                        try:
+                            if wall_type_id and wall_type_id[y][x] == 'door1':
+                                col = (150, 90, 40)  # brown for wooden door
+                        except Exception:
+                            pass
+                        pygame.draw.rect(screen, col, (tx, ty, TILE_SIZE, TILE_SIZE))
                     else:
                         pygame.draw.rect(screen, (8, 8, 8), (tx, ty, TILE_SIZE, TILE_SIZE))
 
