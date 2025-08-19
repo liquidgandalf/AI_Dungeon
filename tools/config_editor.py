@@ -297,7 +297,7 @@ def get_flashed_messages_safe(category):
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", "5060"))
+    port = int(os.environ.get("PORT", "5080"))
     host = os.environ.get("HOST", "127.0.0.1")
     debug = os.environ.get("FLASK_DEBUG", "0") == "1"
     print(f"[info] Config editor running at http://{host}:{port}")

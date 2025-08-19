@@ -31,7 +31,7 @@ if [[ ! -f "$EDITOR" ]]; then
 fi
 
 HOST="${HOST:-127.0.0.1}"
-PORT="${PORT:-5060}"
+PORT="${PORT:-5080}"
 export FLASK_DEBUG=${FLASK_DEBUG:-0}
 
 echo "[info] Opening config editor at http://$HOST:$PORT"
