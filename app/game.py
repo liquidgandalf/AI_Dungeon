@@ -811,11 +811,42 @@ def init_grid_once():
             if grid[y][x] == WALL:
                 wall_type_id[y][x] = outer_type
                 wall_hp[y][x] = outer_hp
-        x = GRID_W - 1
-        for y in range(1, GRID_H - 1):
-            if grid[y][x] == WALL:
-                wall_type_id[y][x] = outer_type
-                wall_hp[y][x] = outer_hp
+
+    # Connect passable components by inserting one door per disconnected region
+    try:
+        _connect_components_via_doors()
+    except Exception:
+        pass
+
+    # Connectivity pass disabled temporarily (investigating black screen). To re-enable:
+    # 1) Choose a seed in the start band [x:1..8, y:mid-4..mid+3] or any passable cell
+    # 2) Call _connect_inaccessible_areas(seed) here after seed selection
+    #
+    # Example of re-enabling safely:
+    # try:
+    #     sx0, sx1 = 1, 8
+    #     sy0 = max(1, GRID_H // 2 - 4)
+    #     sy1 = min(GRID_H - 2, sy0 + 7)
+    #     seed = None
+    #     for y in range(sy0, sy1 + 1):
+    #         for x in range(sx0, sx1 + 1):
+    #             if (grid[y][x] == EMPTY) or (wall_type_id[y][x] == 'door1'):
+    #                 seed = (x, y)
+    #                 break
+    #         if seed:
+    #             break
+    #     if seed is None:
+    #         for y in range(1, GRID_H - 1):
+    #             for x in range(1, GRID_W - 1):
+    #                 if (grid[y][x] == EMPTY) or (wall_type_id[y][x] == 'door1'):
+    #                     seed = (x, y)
+    #                     break
+    #             if seed:
+    #                 break
+    #     if seed is not None:
+    #         _connect_inaccessible_areas(seed)
+    # except Exception:
+    #     pass
 
 def generate_biomes() -> List[List[int]]:
     """Create biome ids per tile (0..6). 0 = default. 1..6 = colored biomes.
@@ -900,6 +931,381 @@ def generate_biomes() -> List[List[int]]:
                     break
     return b
 
+
+def _connect_components_via_doors() -> int:
+    """Connect all passable components to the spawn-band component by inserting
+    one door per disconnected component. Analysis uses a temp passability map:
+    passable iff grid == EMPTY or wall_type_id == 'door1'. Returns number of doors added.
+    Bounded and safe: caps on components and perimeter scanning; avoids outer walls.
+    """
+    from collections import deque
+
+    # Door type must exist
+    try:
+        wt_map = get_wall_type_map()
+        if 'door1' not in wt_map:
+            return 0
+        door_hp = _hp_max_for_type('door1')
+    except Exception:
+        return 0
+
+    # Guards
+    if grid is None or not wall_type_id or not wall_hp:
+        return 0
+
+    def is_passable(x: int, y: int) -> bool:
+        try:
+            return (grid[y][x] == EMPTY) or (wall_type_id[y][x] == 'door1')
+        except Exception:
+            return False
+
+    # Build components over passable cells
+    visited = [[False for _ in range(GRID_W)] for _ in range(GRID_H)]
+    comps: List[List[Tuple[int,int]]] = []
+    MAX_COMPS = 256
+    for y in range(1, GRID_H - 1):
+        for x in range(1, GRID_W - 1):
+            if visited[y][x] or not is_passable(x, y):
+                continue
+            q = deque([(x, y)])
+            visited[y][x] = True
+            comp: List[Tuple[int,int]] = []
+            while q:
+                cx, cy = q.popleft()
+                comp.append((cx, cy))
+                for dx, dy in ((1,0),(-1,0),(0,1),(0,-1)):
+                    nx, ny = cx + dx, cy + dy
+                    if 0 <= nx < GRID_W and 0 <= ny < GRID_H and not visited[ny][nx] and is_passable(nx, ny):
+                        visited[ny][nx] = True
+                        q.append((nx, ny))
+            comps.append(comp)
+            if len(comps) >= MAX_COMPS:
+                break
+        if len(comps) >= MAX_COMPS:
+            break
+
+    if not comps:
+        return 0
+
+    # Identify spawn-band component
+    sx0, sx1 = 1, 8
+    sy0 = max(1, GRID_H // 2 - 4)
+    sy1 = min(GRID_H - 2, sy0 + 7)
+    def in_spawn(x: int, y: int) -> bool:
+        return sx0 <= x <= sx1 and sy0 <= y <= sy1
+    main_idx = 0
+    best_overlap = -1
+    best_size = -1
+    for i, comp in enumerate(comps):
+        overlap = sum(1 for (x, y) in comp if in_spawn(x, y))
+        if overlap > best_overlap or (overlap == best_overlap and len(comp) > best_size):
+            main_idx = i
+            best_overlap = overlap
+            best_size = len(comp)
+
+    main_comp = set(comps[main_idx])
+
+    # Build quick lookup for main membership
+    in_main = [[False for _ in range(GRID_W)] for _ in range(GRID_H)]
+    for (x, y) in main_comp:
+        in_main[y][x] = True
+
+    doors_to_add: List[Tuple[int,int]] = []
+    MAX_SCAN = 10000
+    for i, comp in enumerate(comps):
+        if i == main_idx:
+            continue
+        scans = 0
+        added = False
+        for (x, y) in comp:
+            if added:
+                break
+            for dx, dy in ((1,0),(-1,0),(0,1),(0,-1)):
+                if added:
+                    break
+                nx, ny = x + dx, y + dy
+                if not (0 <= nx < GRID_W and 0 <= ny < GRID_H):
+                    continue
+                # candidate wall between (x,y) in comp and (bx,by) potentially in main
+                if grid[ny][nx] != WALL:
+                    continue
+                # Avoid outer border walls
+                if nx == 0 or ny == 0 or nx == GRID_W - 1 or ny == GRID_H - 1:
+                    continue
+                bx, by = nx + dx, ny + dy
+                if not (0 <= bx < GRID_W and 0 <= by < GRID_H):
+                    continue
+                if in_main[by][bx]:
+                    doors_to_add.append((nx, ny))
+                    added = True
+                    break
+                scans += 1
+                if scans >= MAX_SCAN:
+                    break
+
+    # Apply doors
+    added_doors = 0
+    seen = set()
+    for (dx, dy) in doors_to_add:
+        if (dx, dy) in seen:
+            continue
+        seen.add((dx, dy))
+        try:
+            if grid[dy][dx] == WALL:
+                wall_type_id[dy][dx] = 'door1'
+                wall_hp[dy][dx] = door_hp
+                added_doors += 1
+        except Exception:
+            continue
+
+    # Optional: print minimal log once
+    try:
+        if added_doors > 0:
+            print(f"connectivity: inserted {added_doors} doors at {list(seen)}")
+    except Exception:
+        pass
+
+    return added_doors
+
+def _seal_all_but_spawn_component() -> int:
+    """Seal EMPTY tiles that are not part of the passable component overlapping the
+    intended spawn band. Passable is defined STRICTLY as EMPTY (doors are ignored)
+    to avoid accidental cross-bridging in analysis. Returns count sealed.
+    Spawn band: x in [1..8], y in [GRID_H//2-4 .. GRID_H//2+3].
+    """
+    from collections import deque
+
+    # Guards
+    if grid is None or not wall_type_id or not wall_hp:
+        return 0
+
+    # Build temp passable map: 1 if EMPTY; 0 otherwise (ignore doors)
+    def _temp_passable(x: int, y: int) -> bool:
+        try:
+            return grid[y][x] == EMPTY
+        except Exception:
+            return False
+
+    # Find connected components of passable cells
+    visited = [[False for _ in range(GRID_W)] for _ in range(GRID_H)]
+    components: List[List[Tuple[int,int]]] = []
+    for y in range(1, GRID_H - 1):
+        for x in range(1, GRID_W - 1):
+            if visited[y][x] or not _temp_passable(x, y):
+                continue
+            comp: List[Tuple[int,int]] = []
+            dq = deque([(x, y)])
+            visited[y][x] = True
+            while dq:
+                cx, cy = dq.popleft()
+                comp.append((cx, cy))
+                for dx, dy in ((1,0),(-1,0),(0,1),(0,-1)):
+                    nx, ny = cx + dx, cy + dy
+                    if 0 <= nx < GRID_W and 0 <= ny < GRID_H and not visited[ny][nx] and _temp_passable(nx, ny):
+                        visited[ny][nx] = True
+                        dq.append((nx, ny))
+            components.append(comp)
+
+    if not components:
+        return 0
+
+    # Choose component that overlaps the spawn band the most; tiebreak by size
+    sx0, sx1 = 1, 8
+    sy0 = max(1, GRID_H // 2 - 4)
+    sy1 = min(GRID_H - 2, sy0 + 7)
+    def in_spawn_band(x: int, y: int) -> bool:
+        return sx0 <= x <= sx1 and sy0 <= y <= sy1
+    best = None
+    best_overlap = -1
+    best_size = -1
+    for comp in components:
+        overlap = sum(1 for (x, y) in comp if in_spawn_band(x, y))
+        if overlap > best_overlap or (overlap == best_overlap and len(comp) > best_size):
+            best = comp
+            best_overlap = overlap
+            best_size = len(comp)
+    keep = set(best or [])
+    to_seal: List[Tuple[int,int]] = []
+    for y in range(1, GRID_H - 1):
+        row = grid[y]
+        for x in range(1, GRID_W - 1):
+            if row[x] == EMPTY and (x, y) not in keep:
+                to_seal.append((x, y))
+
+    if not to_seal:
+        return 0
+
+    # Determine default wall type + HP
+    try:
+        wt_map = get_wall_type_map()
+        default_type = next(iter(wt_map.keys()), 'stone1')
+    except Exception:
+        wt_map = {}
+        default_type = 'stone1'
+    def _hp_for(wt_id: str) -> int:
+        info = (wt_map.get(wt_id) or {})
+        stats = (info.get('stats') or {})
+        return max(1, int(stats.get('durability', 1) or 1))
+    hp_default = _hp_for(default_type)
+
+    # Apply sealing to the real map
+    sealed = 0
+    for (x, y) in to_seal:
+        try:
+            if grid[y][x] != EMPTY:
+                continue
+            grid[y][x] = WALL
+            wall_type_id[y][x] = default_type
+            wall_hp[y][x] = hp_default
+            sealed += 1
+        except Exception:
+            continue
+    return sealed
+
+def _connect_inaccessible_areas(seed: Tuple[int, int]) -> None:
+    """Ensure all passable regions are connected to the seed by inserting door tiles.
+    Passability here treats EMPTY and door tiles (wall_type_id == 'door1') as traversable
+    for analysis only; grid remains unchanged (doors are still WALL for gameplay).
+    """
+    from collections import deque
+
+    if not (0 <= seed[0] < GRID_W and 0 <= seed[1] < GRID_H):
+        return
+
+    def _is_passable(tx: int, ty: int) -> bool:
+        if not (0 <= tx < GRID_W and 0 <= ty < GRID_H):
+            return False
+        if grid[ty][tx] == EMPTY:
+            return True
+        try:
+            return wall_type_id[ty][tx] == 'door1'
+        except Exception:
+            return False
+
+    # BFS from seed to get initial reachable set
+    q = deque()
+    seen = [[False for _ in range(GRID_W)] for _ in range(GRID_H)]
+    if _is_passable(seed[0], seed[1]):
+        q.append(seed)
+        seen[seed[1]][seed[0]] = True
+    else:
+        # find nearest passable cell around seed within a small radius
+        sx, sy = seed
+        found = None
+        for r in range(1, 16):
+            for dy in range(-r, r + 1):
+                for dx in range(-r, r + 1):
+                    x, y = sx + dx, sy + dy
+                    if _is_passable(x, y):
+                        found = (x, y)
+                        break
+                if found:
+                    break
+            if found:
+                break
+        if not found:
+            return
+        q.append(found)
+        seen[found[1]][found[0]] = True
+
+    while q:
+        x, y = q.popleft()
+        for dx, dy in ((1,0),(-1,0),(0,1),(0,-1)):
+            nx, ny = x + dx, y + dy
+            if 0 <= nx < GRID_W and 0 <= ny < GRID_H and not seen[ny][nx] and _is_passable(nx, ny):
+                seen[ny][nx] = True
+                q.append((nx, ny))
+
+    # Helper to flood-fill a region from a starting passable cell that is not in 'seen'
+    def _collect_region(start: Tuple[int,int]) -> List[Tuple[int,int]]:
+        reg = []
+        dq = deque([start])
+        vis = set([start])
+        while dq:
+            x, y = dq.popleft()
+            reg.append((x, y))
+            for dx, dy in ((1,0),(-1,0),(0,1),(0,-1)):
+                nx, ny = x + dx, y + dy
+                if (0 <= nx < GRID_W and 0 <= ny < GRID_H and (nx, ny) not in vis 
+                    and _is_passable(nx, ny) and not seen[ny][nx]):
+                    vis.add((nx, ny))
+                    dq.append((nx, ny))
+        return reg
+
+    # Find all unreachable passable regions
+    unreachable_starts: List[Tuple[int,int]] = []
+    for y in range(1, GRID_H - 1):
+        for x in range(1, GRID_W - 1):
+            if _is_passable(x, y) and not seen[y][x]:
+                unreachable_starts.append((x, y))
+
+    if not unreachable_starts:
+        return
+
+    # Resolve wall HP function and door type durability
+    try:
+        wt_map = get_wall_type_map()
+    except Exception:
+        wt_map = {}
+    door_type = 'door1' if 'door1' in wt_map else None
+    def _hp_for(wt_id: str) -> int:
+        info = (wt_map.get(wt_id) or {})
+        stats = (info.get('stats') or {})
+        return max(1, int(stats.get('durability', 1) or 1))
+    door_hp = _hp_for(door_type) if door_type else 1
+
+    # For each unreachable region, place one door bridging to reachable set
+    for start in unreachable_starts:
+        region = _collect_region(start)
+        if not region:
+            continue
+        placed = False
+        for (x, y) in region:
+            # For each direction, look for a wall tile between region and reachable (two-step check)
+            for dx, dy in ((1,0),(-1,0),(0,1),(0,-1)):
+                wx, wy = x + dx, y + dy
+                bx, by = x + 2*dx, y + 2*dy
+                if not (0 <= wx < GRID_W and 0 <= wy < GRID_H and 0 <= bx < GRID_W and 0 <= by < GRID_H):
+                    continue
+                if grid[wy][wx] != WALL:
+                    continue
+                # other side must be passable and already reachable
+                if not _is_passable(bx, by) or not seen[by][bx]:
+                    continue
+                # Don't overwrite indestructible outer wall type
+                try:
+                    if wall_type_id[wy][wx] == 'outer_wall':
+                        continue
+                except Exception:
+                    pass
+                # Convert this wall to a door
+                try:
+                    wall_type_id[wy][wx] = door_type or wall_type_id[wy][wx]
+                    wall_hp[wy][wx] = door_hp
+                except Exception:
+                    pass
+                # Also mark as passable for subsequent connectivity expansion in this run
+                if not seen[wy][wx]:
+                    seen[wy][wx] = True
+                # Expand reachability across this new door and the region beyond
+                dq2 = deque()
+                dq2.append((x, y))
+                loc_seen = set([(x, y)])
+                while dq2:
+                    ux, uy = dq2.popleft()
+                    if not seen[uy][ux]:
+                        seen[uy][ux] = True
+                    for sdx, sdy in ((1,0),(-1,0),(0,1),(0,-1)):
+                        vx, vy = ux + sdx, uy + sdy
+                        if 0 <= vx < GRID_W and 0 <= vy < GRID_H and (vx, vy) not in loc_seen and _is_passable(vx, vy):
+                            loc_seen.add((vx, vy))
+                            dq2.append((vx, vy))
+                placed = True
+                break
+            if placed:
+                break
+        # If no boundary door found (isolated pocket boxed by outer walls), skip
+    return
 
 def init_entities_once():
     global entities_inited, world_entities
