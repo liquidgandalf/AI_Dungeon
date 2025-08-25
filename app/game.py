@@ -122,6 +122,7 @@ import pygame
 import hashlib
 from typing import Dict, Tuple, List, Any
 from app.server import players, socketio
+from world import provider as world_provider
 from app import config as game_config
 from app.items import ITEM_DB, get_weight, backpack_capacity, register_item, get_item
 from app import enemy_ai
@@ -2518,7 +2519,12 @@ def tick_enemies():
 
 def ensure_player(sid: str):
     if sid not in player_state:
-        init_grid_once()
+        # Use world provider seam to ensure world is initialized once
+        try:
+            world_provider.ensure_initialized(init_grid_once)
+        except Exception:
+            # Fallback to direct call if provider not available
+            init_grid_once()
         # Try to restore from persisted profile if available
         restore_cell = None
         restore_angle = None
