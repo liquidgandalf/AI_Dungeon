@@ -2759,30 +2759,91 @@ def run_game(screen: pygame.surface.Surface, qr_surface: pygame.surface.Surface)
             5: (186, 225, 255),  # pastel blue
             6: (218, 186, 255),  # pastel purple
         }
+        # Compute dynamic zoom viewport in tile coords
+        try:
+            zoom_tiles = int((vis_cfg.get('zoom_tiles', 12)))
+        except Exception:
+            zoom_tiles = 12
+        # Maintain 2:1 map aspect in tile margins: X gets double the Y margin
+        x_margin = max(0, zoom_tiles * 2)
+        y_margin = max(0, zoom_tiles)
+        # Gather player cells
+        pcs = [tuple(st.get('cell') or (None, None)) for st in player_state.values() if st and st.get('cell')]
+        pcs = [(int(cx), int(cy)) for (cx, cy) in pcs if isinstance(cx, int) and isinstance(cy, int)]
+        if not pcs:
+            vx0, vy0, vx1, vy1 = 0, 0, GRID_W - 1, GRID_H - 1
+        elif len(pcs) == 1:
+            cx, cy = pcs[0]
+            vx0 = clamp(cx - x_margin, 0, GRID_W - 1)
+            vy0 = clamp(cy - y_margin, 0, GRID_H - 1)
+            vx1 = clamp(cx + x_margin, 0, GRID_W - 1)
+            vy1 = clamp(cy + y_margin, 0, GRID_H - 1)
+        else:
+            xs = [c[0] for c in pcs]
+            ys = [c[1] for c in pcs]
+            minx, maxx = min(xs), max(xs)
+            miny, maxy = min(ys), max(ys)
+            # Start with tight bounds around players
+            vx0 = minx
+            vy0 = miny
+            vx1 = maxx
+            vy1 = maxy
+            # Expand by margins with 2:1 aspect intent
+            vx0 = clamp(vx0 - x_margin, 0, GRID_W - 1)
+            vy0 = clamp(vy0 - y_margin, 0, GRID_H - 1)
+            vx1 = clamp(vx1 + x_margin, 0, GRID_W - 1)
+            vy1 = clamp(vy1 + y_margin, 0, GRID_H - 1)
+        # Ensure at least 1x1 viewport
+        if vx1 < vx0: vx1 = vx0
+        if vy1 < vy0: vy1 = vy0
+        vw = (vx1 - vx0 + 1)
+        vh = (vy1 - vy0 + 1)
+        # Use a uniform scale so tiles remain square, and center within board area
+        u_scale = min(
+            BOARD_PX_W / float(max(1, vw)),
+            BOARD_PX_H / float(max(1, vh)),
+        )
+        # Center the viewport inside the board rectangle
+        used_w = int(u_scale * vw)
+        used_h = int(u_scale * vh)
+        ox = BOARD_ORIGIN_X + (BOARD_PX_W - used_w) // 2
+        oy = BOARD_ORIGIN_Y + (BOARD_PX_H - used_h) // 2
+        def vcell_to_px(cx: int, cy: int) -> Tuple[int, int]:
+            px = ox + int((cx - vx0) * u_scale)
+            py = oy + int((cy - vy0) * u_scale)
+            return (px, py)
+        def vcell_rect(cx: int, cy: int) -> pygame.Rect:
+            # Use successive borders to avoid cumulative truncation seams
+            x0 = ox + int((cx - vx0) * u_scale)
+            y0 = oy + int((cy - vy0) * u_scale)
+            x1 = ox + int((cx - vx0 + 1) * u_scale)
+            y1 = oy + int((cy - vy0 + 1) * u_scale)
+            w = max(1, x1 - x0)
+            h = max(1, y1 - y0)
+            return pygame.Rect(x0, y0, w, h)
+
         # Advance simple enemy AI/movement
         tick_enemies()
-        # Fill empty cells with blended biome color if overlapping
-        for y in range(GRID_H):
-            for x in range(GRID_W):
+
+        # Fill empty cells within viewport
+        for y in range(vy0, vy1 + 1):
+            for x in range(vx0, vx1 + 1):
                 if grid[y][x] == EMPTY:
-                    tx, ty = cell_to_px(x, y)
+                    r = vcell_rect(x, y)
                     if not visible_mask[y][x]:
-                        # unseen tiles are dark
-                        pygame.draw.rect(screen, (8, 8, 8), (tx, ty, TILE_SIZE, TILE_SIZE))
+                        pygame.draw.rect(screen, (8, 8, 8), r)
                         continue
                     # Blend colors from all centers within radius using inverse-distance weights
                     if biome_centers and biome_radius > 0:
-                        cx_sum = cy_sum = 0  # not used; compute weights only
                         wt_sum = 0.0
-                        r = biome_radius
-                        r2 = r * r
+                        rad = biome_radius
+                        r2 = rad * rad
                         cr = cg = cb = 0.0
-                        for (cx, cy, bid) in biome_centers:
-                            dx = x - cx
-                            dy = y - cy
+                        for (cx0, cy0, bid) in biome_centers:
+                            dx = x - cx0
+                            dy = y - cy0
                             d2 = dx*dx + dy*dy
                             if d2 <= r2:
-                                # weight inversely proportional to distance (avoid div by 0)
                                 w = 1.0 / (1.0 + math.sqrt(max(0.0, d2)))
                                 base = biome_colors.get(bid, (135, 206, 235))
                                 cr += base[0] * w
@@ -2797,25 +2858,26 @@ def run_game(screen: pygame.surface.Surface, qr_surface: pygame.surface.Surface)
                     else:
                         bid = biomes[y][x] if biomes else 0
                         col = biome_colors.get(bid, (135, 206, 235))
-                    pygame.draw.rect(screen, col, (tx, ty, TILE_SIZE, TILE_SIZE))
-        # Draw walls on top; doors (door1) are brown, others white
+                    pygame.draw.rect(screen, col, r)
+
+        # Draw walls on top within viewport; doors (door1) are brown, others white
         wall_color = (255, 255, 255)
-        for y in range(GRID_H):
-            for x in range(GRID_W):
+        for y in range(vy0, vy1 + 1):
+            for x in range(vx0, vx1 + 1):
                 if grid[y][x] == WALL:
-                    tx, ty = cell_to_px(x, y)
+                    r = vcell_rect(x, y)
                     if visible_mask[y][x]:
                         col = wall_color
                         try:
                             if wall_type_id and wall_type_id[y][x] == 'door1':
-                                col = (150, 90, 40)  # brown for wooden door
+                                col = (150, 90, 40)
                         except Exception:
                             pass
-                        pygame.draw.rect(screen, col, (tx, ty, TILE_SIZE, TILE_SIZE))
+                        pygame.draw.rect(screen, col, r)
                     else:
-                        pygame.draw.rect(screen, (8, 8, 8), (tx, ty, TILE_SIZE, TILE_SIZE))
+                        pygame.draw.rect(screen, (8, 8, 8), r)
 
-        # Enemy rendering and radar pings (pings on top), gated by config
+        # Enemy pings inside viewport (respect flags)
         try:
             show_enemies = bool(vis_cfg.get('enemies', True))
             show_pings = bool(vis_cfg.get('enemy_pings', True))
@@ -2823,9 +2885,42 @@ def run_game(screen: pygame.surface.Surface, qr_surface: pygame.surface.Surface)
         except Exception:
             show_enemies, show_pings, pings_ignore_vis = True, True, False
         if show_enemies:
-            render_enemies(screen, visible_mask)
-        if show_pings:
-            render_enemy_pings(screen, None if pings_ignore_vis else visible_mask)
+            # no bodies on server map, keep as no-op
+            pass
+        if show_pings and enemies:
+            types = get_enemy_type_map()
+            t = time.time()
+            surf_cache: Dict[Tuple[int,int,int,int,int], pygame.Surface] = {}
+            for e in enemies.values():
+                pos = e.get('pos')
+                if not pos:
+                    continue
+                cx, cy = int(pos[0]), int(pos[1])
+                if not (vx0 <= cx <= vx1 and vy0 <= cy <= vy1):
+                    continue
+                if (not pings_ignore_vis) and (not visible_mask[cy][cx]):
+                    continue
+                info = types.get(str(e.get('type') or '')) or {}
+                col = info.get('pingcolour', [255, 0, 255])
+                is_boss = bool(info.get('boss'))
+                tier = (info.get('tier') or '').lower()
+                scale_b = 2.2 if (is_boss and tier == 'super') else (1.6 if is_boss else 1.0)
+                base_r = 4 + int((math.sin(t * 2.0) + 1.0) * 0.5 * 12)
+                r_px = max(4, int(base_r * scale_b))
+                # Scale by uniform viewport zoom
+                zoom_px = max(1, int(u_scale / max(1.0, float(TILE_SIZE)) * r_px))
+                size = zoom_px * 2 + 4
+                color_a = (int(col[0]), int(col[1]), int(col[2]), 140)
+                cache_key = (color_a[0], color_a[1], color_a[2], color_a[3], zoom_px)
+                surf = surf_cache.get(cache_key)
+                if surf is None:
+                    surf = pygame.Surface((size, size), pygame.SRCALPHA)
+                    pygame.draw.circle(surf, color_a, (zoom_px+2, zoom_px+2), zoom_px, width=2)
+                    surf_cache[cache_key] = surf
+                px, py = vcell_to_px(cx, cy)
+                # center over tile rect
+                ts = int(u_scale)
+                screen.blit(surf, (px + ts//2 - (zoom_px+2), py + ts//2 - (zoom_px+2)))
 
         # Create local state for new players, and process their pending command
         list_y = 220
@@ -3165,35 +3260,35 @@ def run_game(screen: pygame.surface.Surface, qr_surface: pygame.surface.Surface)
 
                     # Per-hit degradation is handled by wall return damage above (instance-based).
 
-            # draw player square and facing highlight
-            px, py = player_state[sid]['pos']
-            pygame.draw.rect(screen, (0, 200, 255), (px, py, PLAYER_SIZE, PLAYER_SIZE))
-            # leading 2 pixels white based on facing
-            d = player_state[sid].get('dir', 'down')
-            white = (255, 255, 255)
-            if d == 'up':
-                screen.set_at((px + 1, py + 0), white)
-                screen.set_at((px + 2, py + 0), white)
-            elif d == 'down':
-                screen.set_at((px + 1, py + 3), white)
-                screen.set_at((px + 2, py + 3), white)
-            elif d == 'left':
-                screen.set_at((px + 0, py + 1), white)
-                screen.set_at((px + 0, py + 2), white)
-            elif d == 'right':
-                screen.set_at((px + 3, py + 1), white)
-                screen.set_at((px + 3, py + 2), white)
+            # draw player square and facing highlight within viewport
+            pcx, pcy = player_state[sid]['cell']
+            if vx0 <= pcx <= vx1 and vy0 <= pcy <= vy1:
+                pr = vcell_rect(pcx, pcy)
+                pygame.draw.rect(screen, (0, 200, 255), pr)
+                # leading 2px white band based on facing
+                d = player_state[sid].get('dir', 'down')
+                white = (255, 255, 255)
+                if d == 'up':
+                    pygame.draw.rect(screen, white, (pr.x, pr.y, pr.w, max(1, pr.h//8)))
+                elif d == 'down':
+                    pygame.draw.rect(screen, white, (pr.x, pr.y + pr.h - max(1, pr.h//8), pr.w, max(1, pr.h//8)))
+                elif d == 'left':
+                    pygame.draw.rect(screen, white, (pr.x, pr.y, max(1, pr.w//8), pr.h))
+                elif d == 'right':
+                    pygame.draw.rect(screen, white, (pr.x + pr.w - max(1, pr.w//8), pr.y, max(1, pr.w//8), pr.h))
 
             # radar ping overlay at player position
             try:
-                t = time.time()
-                # pulse radius 4..20 px
-                r = 4 + int((math.sin(t * 2.0) + 1.0) * 0.5 * 16)
-                surf = pygame.Surface((r*2 + 4, r*2 + 4), pygame.SRCALPHA)
-                alpha = 140
-                pygame.draw.circle(surf, (0, 255, 255, alpha), (r+2, r+2), r, width=2)
-                # center over player tile
-                screen.blit(surf, (px + PLAYER_SIZE//2 - (r+2), py + PLAYER_SIZE//2 - (r+2)))
+                if vx0 <= pcx <= vx1 and vy0 <= pcy <= vy1:
+                    t = time.time()
+                    base_r = 4 + int((math.sin(t * 2.0) + 1.0) * 0.5 * 16)
+                    zoom_px = max(2, int(min(scale_x, scale_y) / max(1.0, float(TILE_SIZE)) * base_r))
+                    size = zoom_px * 2 + 4
+                    surf = pygame.Surface((size, size), pygame.SRCALPHA)
+                    alpha = 140
+                    pygame.draw.circle(surf, (0, 255, 255, alpha), (zoom_px+2, zoom_px+2), zoom_px, width=2)
+                    ppx, ppy = vcell_to_px(pcx, pcy)
+                    screen.blit(surf, (ppx + int(scale_x)//2 - (zoom_px+2), ppy + int(scale_y)//2 - (zoom_px+2)))
             except Exception:
                 pass
 
@@ -3286,11 +3381,15 @@ def run_game(screen: pygame.surface.Surface, qr_surface: pygame.surface.Surface)
                 dot_color = (0, 0, 0)
             else:
                 dot_color = (240, 220, 0) if is_chest else (50, 220, 50)
-            # convert grid coords (floats) to pixel space
-            px = BOARD_ORIGIN_X + int(ex * TILE_SIZE)
-            py = BOARD_ORIGIN_Y + int(ey * TILE_SIZE)
-            # 2x2 dot centered-ish
-            pygame.draw.rect(screen, dot_color, (px - 1, py - 1, 2, 2))
+            # Viewport-aware draw: clamp to viewport and scale dot with u_scale
+            if not (vx0 <= ix <= vx1 and vy0 <= iy <= vy1):
+                continue
+            tile_rect = vcell_rect(ix, iy)
+            # size: 1/3 of tile, at least 2px
+            ds = max(2, int(max(1, int(u_scale)) // 3))
+            cx = tile_rect.centerx
+            cy = tile_rect.centery
+            pygame.draw.rect(screen, dot_color, pygame.Rect(cx - ds // 2, cy - ds // 2, ds, ds))
 
         # Emit simple raycast frames to each player at ~10 FPS
         now = time.time()

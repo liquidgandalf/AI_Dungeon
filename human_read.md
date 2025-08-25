@@ -349,6 +349,31 @@ We currently read enemy sprite metadata from `map_entities.json`. We can merge t
 - Overlaps are blended; walls drawn in white above biomes; players and UI above all.
 - Big circular rooms (radius 12) are carved at biome centers without breaking the exterior wall.
 
+### Zoomed desktop map (viewport + scaling)
+- Config: `config/game_config.json` → `visibility.zoom_tiles` controls the margin around players.
+- Code: `app/game.py` in the main run loop computes a tile-space viewport `[vx0, vy0, vx1, vy1]` centered on active players, clamped to grid.
+- 2:1 map aspect preserved in margins:
+  - Horizontal margin `x_margin = zoom_tiles * 2`
+  - Vertical margin `y_margin = zoom_tiles`
+  - For multiple players, the tight bounds around all players are expanded by these margins before clamping.
+- Uniform scale keeps tiles square and centers the zoom inside the board area:
+  - `u_scale` is the per-tile pixel size derived from board size vs viewport size.
+  - `ox, oy` center the used pixel area within `BOARD_ORIGIN_X/Y` and `BOARD_PX_W/H`.
+- Helpers (defined around `app/game.py` ~2802–2810) convert tile coords using the viewport:
+  - `vcell_to_px(cx, cy) -> (x, y)`
+  - `vcell_rect(cx, cy) -> pygame.Rect`
+- Rendering loops for biomes and walls iterate only `y in [vy0..vy1]`, `x in [vx0..vx1]` and use `vcell_rect()` so tiles never stretch and never draw outside the map.
+
+### Entity markers (chests, pillars) inside the zoom
+- Location: `app/game.py` around ~3344.
+- Behavior:
+  - Iterates `world_entities` and determines visibility via `visible_mask[iy][ix]`.
+  - Honors `visibility.show_chests` (chests can show through fog when enabled).
+  - Uses the viewport helpers for placement: `tile_rect = vcell_rect(ix, iy)`.
+  - Dot size scales with the tile size: `ds = max(2, int(max(1, int(u_scale)) // 3))`.
+  - Colors: pillar = black `(0,0,0)`, chest = yellow `(240,220,0)`, other items = green `(50,220,50)`.
+- Note: This replaced the older approach that used `BOARD_ORIGIN_X/Y + TILE_SIZE * pos` which drew dots in the black letterbox outside the zoomed area.
+
 ### wall_types.json
 Defines wall materials and their gameplay effects.
 - `type`, `name`, `image`: identifiers and optional sprite key.

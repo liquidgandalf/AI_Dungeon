@@ -19,12 +19,13 @@
     "count": 24
   },
   "visibility": {
-    "mode": "full",
+    "mode": "reveal",
     "reveal_radius": 6,
     "enemies": true,
     "enemy_pings": true,
     "show_chests": true,
-    "enemy_pings_ignore_visibility": false
+    "enemy_pings_ignore_visibility": false,
+    "zoom_tiles": 12
   },
   "tuning": {
     "item_floor_bias_px": 0,
