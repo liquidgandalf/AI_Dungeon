@@ -45,6 +45,36 @@ def _get_enemy_sprite(etype: str, info: Dict[str, Any]) -> Tuple['pygame.Surface
 # Cache natural image sizes to avoid reloading every frame
 _IMAGE_SIZE_CACHE = {}
 
+def _resolve_wall_image_file(img_name: str) -> str:
+    """Resolve a wall tile image filename to its path under static/img/tiles/.
+    Accepts either a bare filename (e.g., 'stonewall.png') or a relative path.
+    """
+    if not img_name:
+        return None
+    # If user already provided a subpath, respect it
+    if (os.path.sep in img_name) or ('/' in img_name):
+        return img_name
+    return os.path.join('static', 'img', 'tiles', img_name)
+
+def _get_tile_image(img_name: str, w: int, h: int) -> 'pygame.Surface':
+    """Load and scale a tile image (e.g., wall) to (w,h) with caching.
+    Returns None on failure.
+    """
+    try:
+        path = _resolve_wall_image_file(img_name)
+        if not path:
+            return None
+        key = (path, int(w), int(h))
+        surf = _TILE_IMG_CACHE.get(key)
+        if surf is not None:
+            return surf
+        img = pygame.image.load(path).convert_alpha()
+        surf = pygame.transform.smoothscale(img, (int(w), int(h)))
+        _TILE_IMG_CACHE[key] = surf
+        return surf
+    except Exception:
+        return None
+
 def _get_image_natural_size(img_name: str):
     """Return (w, h) read from the PNG at static/img/items/<img_name>.
     Falls back to (64,64) on error. Results are cached.
@@ -202,6 +232,7 @@ _WALL_TYPE_MAP: Dict[str, Dict[str, Any]] = {}
 # Sprite caches
 _ENEMY_SPRITE_CACHE: Dict[Tuple[str, int, int], pygame.Surface] = {}
 _ITEM_ICON_CACHE: Dict[Tuple[str, int, int], pygame.Surface] = {}
+_TILE_IMG_CACHE: Dict[Tuple[str, int, int], pygame.Surface] = {}
 
 def clamp(v: int, lo: int, hi: int) -> int:
     return max(lo, min(hi, int(v)))
@@ -2759,40 +2790,47 @@ def run_game(screen: pygame.surface.Surface, qr_surface: pygame.surface.Surface)
             5: (186, 225, 255),  # pastel blue
             6: (218, 186, 255),  # pastel purple
         }
-        # Compute dynamic zoom viewport in tile coords
+        # Compute viewport in tile coords (zoomed if enabled, otherwise full grid)
         try:
-            zoom_tiles = int((vis_cfg.get('zoom_tiles', 12)))
+            zoom_enabled = bool(vis_cfg.get('zoom_enabled', True))
         except Exception:
-            zoom_tiles = 12
-        # Maintain 2:1 map aspect in tile margins: X gets double the Y margin
-        x_margin = max(0, zoom_tiles * 2)
-        y_margin = max(0, zoom_tiles)
-        # Gather player cells
-        pcs = [tuple(st.get('cell') or (None, None)) for st in player_state.values() if st and st.get('cell')]
-        pcs = [(int(cx), int(cy)) for (cx, cy) in pcs if isinstance(cx, int) and isinstance(cy, int)]
-        if not pcs:
+            zoom_enabled = True
+        if not zoom_enabled:
             vx0, vy0, vx1, vy1 = 0, 0, GRID_W - 1, GRID_H - 1
-        elif len(pcs) == 1:
-            cx, cy = pcs[0]
-            vx0 = clamp(cx - x_margin, 0, GRID_W - 1)
-            vy0 = clamp(cy - y_margin, 0, GRID_H - 1)
-            vx1 = clamp(cx + x_margin, 0, GRID_W - 1)
-            vy1 = clamp(cy + y_margin, 0, GRID_H - 1)
         else:
-            xs = [c[0] for c in pcs]
-            ys = [c[1] for c in pcs]
-            minx, maxx = min(xs), max(xs)
-            miny, maxy = min(ys), max(ys)
-            # Start with tight bounds around players
-            vx0 = minx
-            vy0 = miny
-            vx1 = maxx
-            vy1 = maxy
-            # Expand by margins with 2:1 aspect intent
-            vx0 = clamp(vx0 - x_margin, 0, GRID_W - 1)
-            vy0 = clamp(vy0 - y_margin, 0, GRID_H - 1)
-            vx1 = clamp(vx1 + x_margin, 0, GRID_W - 1)
-            vy1 = clamp(vy1 + y_margin, 0, GRID_H - 1)
+            try:
+                zoom_tiles = int((vis_cfg.get('zoom_tiles', 12)))
+            except Exception:
+                zoom_tiles = 12
+            # Maintain 2:1 map aspect in tile margins: X gets double the Y margin
+            x_margin = max(0, zoom_tiles * 2)
+            y_margin = max(0, zoom_tiles)
+            # Gather player cells
+            pcs = [tuple(st.get('cell') or (None, None)) for st in player_state.values() if st and st.get('cell')]
+            pcs = [(int(cx), int(cy)) for (cx, cy) in pcs if isinstance(cx, int) and isinstance(cy, int)]
+            if not pcs:
+                vx0, vy0, vx1, vy1 = 0, 0, GRID_W - 1, GRID_H - 1
+            elif len(pcs) == 1:
+                cx, cy = pcs[0]
+                vx0 = clamp(cx - x_margin, 0, GRID_W - 1)
+                vy0 = clamp(cy - y_margin, 0, GRID_H - 1)
+                vx1 = clamp(cx + x_margin, 0, GRID_W - 1)
+                vy1 = clamp(cy + y_margin, 0, GRID_H - 1)
+            else:
+                xs = [c[0] for c in pcs]
+                ys = [c[1] for c in pcs]
+                minx, maxx = min(xs), max(xs)
+                miny, maxy = min(ys), max(ys)
+                # Start with tight bounds around players
+                vx0 = minx
+                vy0 = miny
+                vx1 = maxx
+                vy1 = maxy
+                # Expand by margins with 2:1 aspect intent
+                vx0 = clamp(vx0 - x_margin, 0, GRID_W - 1)
+                vy0 = clamp(vy0 - y_margin, 0, GRID_H - 1)
+                vx1 = clamp(vx1 + x_margin, 0, GRID_W - 1)
+                vy1 = clamp(vy1 + y_margin, 0, GRID_H - 1)
         # Ensure at least 1x1 viewport
         if vx1 < vx0: vx1 = vx0
         if vy1 < vy0: vy1 = vy0
@@ -2860,22 +2898,41 @@ def run_game(screen: pygame.surface.Surface, qr_surface: pygame.surface.Surface)
                         col = biome_colors.get(bid, (135, 206, 235))
                     pygame.draw.rect(screen, col, r)
 
-        # Draw walls on top within viewport; doors (door1) are brown, others white
-        wall_color = (255, 255, 255)
+        # Draw walls on top within viewport; use images from wall_types.json when available
+        wt_map = get_wall_type_map()
         for y in range(vy0, vy1 + 1):
             for x in range(vx0, vx1 + 1):
                 if grid[y][x] == WALL:
                     r = vcell_rect(x, y)
-                    if visible_mask[y][x]:
-                        col = wall_color
-                        try:
-                            if wall_type_id and wall_type_id[y][x] == 'door1':
-                                col = (150, 90, 40)
-                        except Exception:
-                            pass
-                        pygame.draw.rect(screen, col, r)
-                    else:
+                    if not visible_mask[y][x]:
                         pygame.draw.rect(screen, (8, 8, 8), r)
+                        continue
+                    # Resolve wall type and image
+                    wt_id = None
+                    try:
+                        wt_id = wall_type_id[y][x]
+                    except Exception:
+                        wt_id = None
+                    info = (wt_map.get(wt_id) or {}) if wt_id else {}
+                    img_name = info.get('image')
+                    # Fallback image names per type
+                    if not img_name:
+                        if wt_id == 'door1':
+                            img_name = 'door_wood.png'
+                        else:
+                            img_name = 'stonewall.png'
+                    # Fetch scaled tile surface and blit; try fallbacks if missing
+                    surf = _get_tile_image(img_name, r.width, r.height)
+                    if surf is None:
+                        # Try sensible defaults if provided filename missing
+                        fallback_img = 'door_wood.png' if wt_id == 'door1' else 'stonewall.png'
+                        surf = _get_tile_image(fallback_img, r.width, r.height)
+                    if surf is not None:
+                        screen.blit(surf, (r.x, r.y))
+                    else:
+                        # Final fallback colors similar to previous behavior
+                        col = (150, 90, 40) if wt_id == 'door1' else (255, 255, 255)
+                        pygame.draw.rect(screen, col, r)
 
         # Enemy pings inside viewport (respect flags)
         try:

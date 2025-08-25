@@ -74,6 +74,8 @@ def get_game_config() -> Dict[str, Any]:
         vis = {}
     vis.setdefault('mode', 'reveal')  # 'full', 'fog', or 'reveal'
     vis.setdefault('reveal_radius', 6)  # in tiles
+    # Zoomed big-map viewport toggle
+    vis.setdefault('zoom_enabled', True)
     # Big-map visibility toggles
     vis.setdefault('enemies', True)       # show enemy markers on big map
     vis.setdefault('enemy_pings', True)   # show radar pings on big map
