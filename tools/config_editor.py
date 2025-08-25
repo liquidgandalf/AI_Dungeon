@@ -136,6 +136,11 @@ TEMPLATE = """
             <label for="visibility.reveal_radius">Reveal radius</label>
             <input type="number" id="visibility.reveal_radius" name="visibility.reveal_radius" value="{{ cfg.visibility.reveal_radius }}" min="1" step="1">
           </div>
+          <div class="col">
+            <label for="visibility.zoom_tiles">Zoom tiles</label>
+            <input type="number" id="visibility.zoom_tiles" name="visibility.zoom_tiles" value="{{ cfg.visibility.get('zoom_tiles', 12) }}" min="1" step="1">
+            <small class="hint">Controls how far around players the zoomed viewport extends (higher = wider).</small>
+          </div>
         </div>
         <div class="row">
           <div class="col">
@@ -155,6 +160,10 @@ TEMPLATE = """
             <div class="checkbox">
               <input type="checkbox" id="visibility.show_chests" name="visibility.show_chests" {% if cfg.visibility.show_chests %}checked{% endif %}>
               <label for="visibility.show_chests">Show chests through fog</label>
+            </div>
+            <div class="checkbox">
+              <input type="checkbox" id="visibility.zoom_enabled" name="visibility.zoom_enabled" {% if cfg.visibility.get('zoom_enabled', True) %}checked{% endif %}>
+              <label for="visibility.zoom_enabled">Enable zoomed player-centered viewport</label>
             </div>
           </div>
         </div>
@@ -265,6 +274,7 @@ def save():
         set_num(cfg, 'biomes.radius', form.get('biomes.radius'), min_val=1)
         set_num(cfg, 'rooms.count', form.get('rooms.count'), min_val=0)
         set_num(cfg, 'visibility.reveal_radius', form.get('visibility.reveal_radius'), min_val=1)
+        set_num(cfg, 'visibility.zoom_tiles', form.get('visibility.zoom_tiles'), min_val=1)
 
         # Selects / booleans
         mode = form.get('visibility.mode') or 'full'
@@ -273,6 +283,7 @@ def save():
         nested_set(cfg, 'visibility.enemy_pings', as_bool(form.get('visibility.enemy_pings')))
         nested_set(cfg, 'visibility.enemy_pings_ignore_visibility', as_bool(form.get('visibility.enemy_pings_ignore_visibility')))
         nested_set(cfg, 'visibility.show_chests', as_bool(form.get('visibility.show_chests')))
+        nested_set(cfg, 'visibility.zoom_enabled', as_bool(form.get('visibility.zoom_enabled')))
 
         save_config(cfg)
         flash("Saved config (backup written)", 'ok')
